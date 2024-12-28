@@ -513,24 +513,24 @@ const QuotationGenerator = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-4 sm:py-8 px-2 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mb-4 sm:mb-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-0">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Quotation Generator</h1>
-              <p className="mt-1 text-sm text-gray-500">Create professional quotations for your interior projects</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center sm:text-left">Quotation Generator</h1>
+              <p className="mt-1 text-sm text-gray-500 text-center sm:text-left">Create professional quotations for your interior projects</p>
             </div>
-            <img src="/images/portfolio/new.png" alt="Logo" className="h-16 w-auto" />
+            <img src="/images/portfolio/new.png" alt="Logo" className="h-12 sm:h-16 w-auto" />
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-8">
           {/* Client Information Card */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Client Information</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6">Client Information</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Site Code</label>
                 <input
@@ -538,7 +538,7 @@ const QuotationGenerator = () => {
                   value={siteCode}
                   onChange={(e) => setSiteCode(e.target.value)}
                   required
-                  className="mt-1 block w-full rounded-md border-2 border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-2 border-black px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
                   placeholder="Enter site code"
                 />
               </div>
@@ -548,7 +548,7 @@ const QuotationGenerator = () => {
                   type="text"
                   value={date}
                   readOnly
-                  className="mt-1 block w-full rounded-md border-2 border-gray-300 bg-gray-50 shadow-sm sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-2 border-black bg-gray-50 shadow-sm sm:text-sm text-black"
                 />
               </div>
               <div>
@@ -557,7 +557,7 @@ const QuotationGenerator = () => {
                   type="text"
                   value={version}
                   onChange={(e) => setVersion(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-2 border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-2 border-black px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
                   placeholder="Enter version"
                 />
               </div>
@@ -568,7 +568,7 @@ const QuotationGenerator = () => {
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   required
-                  className="mt-1 block w-full rounded-md border-2 border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-2 border-black px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
                   placeholder="Enter client name"
                 />
               </div>
@@ -579,7 +579,7 @@ const QuotationGenerator = () => {
                   value={siteAddress}
                   onChange={(e) => setSiteAddress(e.target.value)}
                   required
-                  className="mt-1 block w-full rounded-md border-2 border-gray-300 px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-2 border-black px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
                   placeholder="Enter complete site address"
                 />
               </div>
@@ -587,53 +587,53 @@ const QuotationGenerator = () => {
           </div>
 
           {/* Room Management */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4 sm:gap-0">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Room Management</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Room Management</h2>
                 <p className="mt-1 text-sm text-gray-500">Add and manage rooms for your project</p>
               </div>
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
                 <input
                   type="text"
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
-                  className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black w-full sm:w-auto"
                   placeholder="Enter room name"
                 />
                 <button
                   type="button"
                   onClick={addRoom}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-full sm:w-auto"
                 >
                   Add Room
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {rooms.map((room) => (
-                <div key={room} className="relative group bg-white rounded-lg border border-gray-200 p-4 hover:border-indigo-500 transition-colors duration-150">
+                <div key={room} className="relative group bg-white rounded-lg border border-gray-200 p-4 sm:p-6 hover:border-indigo-500 transition-colors duration-150">
                   {editingRoom?.oldName === room ? (
                     <div className="space-y-3">
                       <input
                         type="text"
                         value={editingRoom.newName}
                         onChange={(e) => setEditingRoom({ ...editingRoom, newName: e.target.value })}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        className="block w-full rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-black"
                       />
                       <div className="flex space-x-2">
                         <button
                           type="button"
                           onClick={saveEditedRoom}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                         >
                           Save
                         </button>
                         <button
                           type="button"
                           onClick={() => setEditingRoom(null)}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
                           Cancel
                         </button>
@@ -642,7 +642,7 @@ const QuotationGenerator = () => {
                   ) : (
                     <>
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg font-medium text-gray-900">{room}</h3>
+                        <h3 className="text-lg sm:text-xl font-medium text-gray-900">{room}</h3>
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
                           {items.filter(item => item.room === room).length} items
                         </span>
@@ -651,14 +651,14 @@ const QuotationGenerator = () => {
                         <button
                           type="button"
                           onClick={() => startEditingRoom(room)}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
                           Edit
                         </button>
                         <button
                           type="button"
                           onClick={() => deleteRoom(room)}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
+                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                         >
                           Delete
                         </button>
@@ -671,42 +671,42 @@ const QuotationGenerator = () => {
           </div>
 
           {/* Custom Item Management */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4 sm:gap-0">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Custom Items</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Custom Items</h2>
                 <p className="mt-1 text-sm text-gray-500">Manage your catalog of items and their prices</p>
               </div>
-              <div className="flex items-center space-x-4">
-                <div className="flex space-x-2">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 w-full sm:w-auto">
                   <input
                     type="text"
                     value={newItemName}
                     onChange={(e) => setNewItemName(e.target.value)}
-                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="flex-1 rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black w-full"
                     placeholder="Item name"
                   />
                   <input
                     type="number"
                     value={newItemPrice}
                     onChange={(e) => setNewItemPrice(parseFloat(e.target.value))}
-                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="flex-1 rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black w-full"
                     placeholder="Price"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={addCustomItem}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-full sm:w-auto"
                 >
                   Add Item
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {Object.entries(customItems).map(([itemName, price]) => (
-                <div key={itemName} className="relative group bg-white rounded-lg border border-gray-200 p-4 hover:border-indigo-500 transition-colors duration-150">
+                <div key={itemName} className="relative group bg-white rounded-lg border border-gray-200 p-4 sm:p-6 hover:border-indigo-500 transition-colors duration-150">
                   {editingItem === itemName ? (
                     <div className="space-y-3">
                       <div className="font-medium text-gray-900">{itemName}</div>
@@ -714,7 +714,7 @@ const QuotationGenerator = () => {
                         type="number"
                         value={editingPrice}
                         onChange={(e) => setEditingPrice(parseFloat(e.target.value))}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        className="block w-full rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
                       />
                       <div className="flex space-x-2">
                         <button
@@ -736,7 +736,7 @@ const QuotationGenerator = () => {
                   ) : (
                     <>
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg font-medium text-gray-900">{itemName}</h3>
+                        <h3 className="text-lg sm:text-xl font-medium text-gray-900">{itemName}</h3>
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                           ₹{formatPrice(price)}/area
                         </span>
@@ -765,24 +765,24 @@ const QuotationGenerator = () => {
           </div>
 
           {/* Terms and Conditions */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <div className="flex items-center justify-between mb-6">
+          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4 sm:gap-0">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Terms & Conditions</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Terms & Conditions</h2>
                 <p className="mt-1 text-sm text-gray-500">Manage terms and conditions for your quotations</p>
               </div>
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
                 <input
                   type="text"
                   value={newTerm}
                   onChange={(e) => setNewTerm(e.target.value)}
-                  className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
                   placeholder="Enter new term"
                 />
                 <button
                   type="button"
                   onClick={addTerm}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-full sm:w-auto"
                 >
                   Add Term
                 </button>
@@ -798,7 +798,7 @@ const QuotationGenerator = () => {
                         type="text"
                         value={editingTerm.text}
                         onChange={(e) => setEditingTerm({ ...editingTerm, text: e.target.value })}
-                        className="flex-1 rounded-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        className="flex-1 rounded-md border-2 border-black focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
                       />
                       <button
                         type="button"
@@ -867,10 +867,10 @@ const QuotationGenerator = () => {
 
           {/* Room-wise Items */}
           {rooms.map((room) => (
-            <div key={room} className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between mb-6">
+            <div key={room} className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4 sm:gap-0">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">{room}</h2>
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900">{room}</h2>
                   <p className="mt-1 text-sm text-gray-500">
                     {items.filter(item => item.room === room).length} items configured
                   </p>
@@ -878,7 +878,7 @@ const QuotationGenerator = () => {
                 <button
                   type="button"
                   onClick={() => addItem(room)}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-full sm:w-auto"
                 >
                   Add Item
                 </button>
@@ -887,13 +887,13 @@ const QuotationGenerator = () => {
               <div className="space-y-4">
                 {items.filter(item => item.room === room).map((item) => (
                   <div key={item.id} className="bg-gray-50 p-4 rounded-lg">
-                    <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Item</label>
                         <select
                           value={item.item}
                           onChange={(e) => updateItem(item.id, 'item', e.target.value)}
-                          className="mt-1 block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          className="mt-1 block w-full rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
                         >
                           {Object.keys(customItems).map(itemName => (
                             <option key={itemName} value={itemName}>{itemName}</option>
@@ -907,7 +907,7 @@ const QuotationGenerator = () => {
                           value={item.d1}
                           onChange={(e) => updateItem(item.id, 'd1', parseFloat(e.target.value))}
                           required
-                          className="mt-1 block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          className="mt-1 block w-full rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
                           placeholder="0"
                         />
                       </div>
@@ -918,7 +918,7 @@ const QuotationGenerator = () => {
                           value={item.d2}
                           onChange={(e) => updateItem(item.id, 'd2', parseFloat(e.target.value))}
                           required
-                          className="mt-1 block w-full rounded-md border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                          className="mt-1 block w-full rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
                           placeholder="0"
                         />
                       </div>
@@ -928,7 +928,7 @@ const QuotationGenerator = () => {
                           type="text"
                           value={item.type}
                           readOnly
-                          className="mt-1 block w-full rounded-md border-2 border-gray-300 bg-gray-50 shadow-sm sm:text-sm"
+                          className="mt-1 block w-full rounded-md border-2 border-black bg-gray-50 shadow-sm sm:text-sm text-black"
                         />
                       </div>
                       <div>
@@ -938,7 +938,7 @@ const QuotationGenerator = () => {
                             type="number"
                             value={item.area}
                             readOnly
-                            className="block w-full rounded-md border-2 border-gray-300 bg-gray-50 pr-12 sm:text-sm"
+                            className="block w-full rounded-md border-2 border-black bg-gray-50 pr-12 sm:text-sm text-black"
                           />
                           <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                             <span className="text-gray-500 sm:text-sm">m²</span>
@@ -955,7 +955,7 @@ const QuotationGenerator = () => {
                             type="number"
                             value={item.price}
                             readOnly
-                            className="block w-full rounded-md border-2 border-gray-300 pl-7 bg-gray-50 sm:text-sm"
+                            className="block w-full rounded-md border-2 border-black pl-7 bg-gray-50 sm:text-sm text-black"
                           />
                         </div>
                       </div>
@@ -970,7 +970,7 @@ const QuotationGenerator = () => {
                               type="number"
                               value={item.totalAmount}
                               readOnly
-                              className="block w-full rounded-md border-2 border-gray-300 pl-7 bg-gray-50 sm:text-sm"
+                              className="block w-full rounded-md border-2 border-black pl-7 bg-gray-50 sm:text-sm text-black"
                             />
                           </div>
                           <button
@@ -992,13 +992,13 @@ const QuotationGenerator = () => {
           ))}
 
           {/* Additional Services */}
-          <div className="bg-white rounded-lg shadow-sm p-6 mt-8">
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Additional Services</h2>
+          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mt-8">
+            <div className="mb-4 sm:mb-6">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Additional Services</h2>
               <p className="mt-1 text-sm text-gray-500">Configure extra services and their descriptions</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
               {/* False Ceiling */}
               <div className="space-y-4">
                 <div>
@@ -1014,7 +1014,7 @@ const QuotationGenerator = () => {
                         const value = e.target.value.replace(/[^0-9]/g, '');
                         setFalseCeiling(value);
                       }}
-                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-black rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-black"
                       placeholder="Enter amount"
                     />
                   </div>
@@ -1025,7 +1025,7 @@ const QuotationGenerator = () => {
                     value={falseCeilingDesc}
                     onChange={(e) => setFalseCeilingDesc(e.target.value)}
                     rows={3}
-                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-2 border-gray-300 rounded-md"
+                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-2 border-black rounded-md text-black"
                     placeholder="Enter false ceiling details"
                   />
                 </div>
@@ -1046,7 +1046,7 @@ const QuotationGenerator = () => {
                         const value = e.target.value.replace(/[^0-9]/g, '');
                         setElectrical(value);
                       }}
-                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-black rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-black"
                       placeholder="Enter amount"
                     />
                   </div>
@@ -1057,7 +1057,7 @@ const QuotationGenerator = () => {
                     value={electricalDesc}
                     onChange={(e) => setElectricalDesc(e.target.value)}
                     rows={3}
-                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-2 border-gray-300 rounded-md"
+                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-2 border-black rounded-md text-black"
                     placeholder="Enter electrical work details"
                   />
                 </div>
@@ -1078,7 +1078,7 @@ const QuotationGenerator = () => {
                         const value = e.target.value.replace(/[^0-9]/g, '');
                         setPainting(value);
                       }}
-                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-black rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-black"
                       placeholder="Enter amount"
                     />
                   </div>
@@ -1089,7 +1089,7 @@ const QuotationGenerator = () => {
                     value={paintingDesc}
                     onChange={(e) => setPaintingDesc(e.target.value)}
                     rows={3}
-                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-2 border-gray-300 rounded-md"
+                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-2 border-black rounded-md text-black"
                     placeholder="Enter painting work details"
                   />
                 </div>
@@ -1098,14 +1098,14 @@ const QuotationGenerator = () => {
           </div>
 
           {/* Total Summary */}
-          <div className="bg-white rounded-lg shadow-sm p-6 mt-8">
+          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mt-8">
             <div className="flex justify-between items-center">
               <div className="space-y-1">
-                <h3 className="text-lg font-medium text-gray-900">Total Amount</h3>
+                <h3 className="text-lg sm:text-xl font-medium text-gray-900">Total Amount</h3>
                 <p className="text-sm text-gray-500">Including all services and items</p>
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-gray-900">
+                <div className="text-3xl sm:text-4xl font-bold text-gray-900">
                   ₹{formatPrice(calculateTotal())}
                 </div>
                 <p className="text-sm text-gray-500">Total Amount</p>
@@ -1114,10 +1114,10 @@ const QuotationGenerator = () => {
           </div>
 
           {/* Generate PDF Button */}
-          <div className="mt-8 flex justify-end">
+          <div className="flex justify-end mt-4 sm:mt-8">
             <button
               type="submit"
-              className="inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base sm:text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-full sm:w-auto"
             >
               Generate Quotation
             </button>
