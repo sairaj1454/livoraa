@@ -1,0 +1,222 @@
+/* Admin-specific styles */
+.admin-layout {
+  min-height: 100vh;
+  width: 100%;
+  background-color: #f8f9fa;
+}
+
+/* Reset any main website styles that might interfere */
+.admin-layout .navbar,
+.admin-layout .footer {
+  display: none;
+}
+
+/* Admin-specific scrolling behavior */
+.admin-layout {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Mobile-specific styles */
+@media (max-width: 1024px) {
+  .mobile-header {
+    height: 60px;
+  }
+
+  .mobile-content {
+    padding-top: 60px;
+  }
+
+  .mobile-menu {
+    padding-top: 60px;
+  }
+
+  .mobile-menu-close {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 60;
+  }
+}
+
+/* Mobile menu animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.mobile-menu-enter {
+  transform: translateX(-100%);
+}
+
+.mobile-menu-enter-active {
+  transform: translateX(0);
+  transition: transform 300ms ease-in-out;
+}
+
+.mobile-menu-exit {
+  transform: translateX(0);
+}
+
+.mobile-menu-exit-active {
+  transform: translateX(-100%);
+  transition: transform 300ms ease-in-out;
+}
+
+/* Mobile backdrop */
+.mobile-backdrop {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Mobile navigation items */
+.mobile-nav-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  transition: all 0.2s ease;
+}
+
+.mobile-nav-item:hover {
+  background-color: #f3f4f6;
+}
+
+.mobile-nav-item.active {
+  background-color: #4f46e5;
+  color: white;
+}
+
+/* Prevent content scrolling when menu is open */
+.menu-open {
+  overflow: hidden;
+}
+
+/* Mobile-friendly form elements */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .form-label {
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+}
+
+/* Custom scrollbar for mobile */
+@media (max-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+  }
+}
+
+/* Ensure proper z-index stacking */
+.mobile-header {
+  z-index: 40;
+}
+
+.mobile-menu {
+  z-index: 50;
+}
+
+.mobile-menu-backdrop {
+  z-index: 45;
+}
+
+/* Add padding to main content area on mobile */
+@media (max-width: 1024px) {
+  .main-content {
+    padding-top: 60px;
+  }
+}
+
+/* Mobile-specific padding adjustments */
+@media (max-width: 768px) {
+  .content-wrapper {
+    padding-top: 64px; /* Height of mobile header */
+  }
+  
+  .mobile-nav {
+    padding-top: 64px;
+  }
+}
+
+/* Touch-friendly tap targets */
+@media (max-width: 768px) {
+  .nav-button,
+  .mobile-menu-item {
+    min-height: 48px;
+    padding: 12px 16px;
+  }
+}
+
+/* Smooth scrolling for mobile */
+@media (max-width: 768px) {
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+}
+
+/* Mobile header shadow animation */
+.mobile-header {
+  transition: box-shadow 0.3s ease;
+}
+
+.mobile-header.scrolled {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Mobile navigation button effects */
+.nav-button {
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.nav-button::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 2px;
+  background-color: #4f46e5;
+  transition: width 0.2s ease;
+}
+
+.nav-button:hover::after {
+  width: 100%;
+}
+
+.nav-button.active {
+  background-color: #4f46e5;
+  color: white;
+}

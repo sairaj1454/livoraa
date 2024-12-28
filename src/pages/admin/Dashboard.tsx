@@ -1,0 +1,363 @@
+import { useState } from 'react';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../config/firebase';
+import { useNavigate } from 'react-router-dom';
+import GalleryUpload from '../../components/GalleryUpload';
+import GalleryManager from '../../components/GalleryManager';
+import EnquiriesManager from '../../components/EnquiriesManager';
+import BlogUpload from '../../components/BlogUpload';
+import BlogManager from '../../components/BlogManager';
+import TestimonialManager from '../../components/TestimonialManager';
+import ProjectUpload from '../../components/ProjectUpload';
+import CustomerDatabase from '../../components/CustomerDatabase';
+import EmailCampaign from '../../components/EmailCampaign';
+import ProjectOverview from '../../components/ProjectOverview';
+import EmployeeManager from '../../components/EmployeeManager';
+import Settings from '../../components/Settings';
+import QuotationGenerator from '../../components/QuotationGenerator';
+import ReceiptGenerator from '../../components/ReceiptGenerator';
+import { useDashboardData } from '../../hooks/useDashboardData';
+import {
+  HomeIcon,
+  PhotoIcon,
+  UserGroupIcon,
+  NewspaperIcon,
+  Cog6ToothIcon,
+  ArrowLeftOnRectangleIcon,
+  Bars3Icon,
+  XMarkIcon,
+  ChartBarIcon,
+  UsersIcon,
+  EnvelopeIcon,
+  BriefcaseIcon,
+  DocumentTextIcon,
+  ReceiptRefundIcon,
+} from '@heroicons/react/24/outline';
+
+const Dashboard = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const { data, loading, error } = useDashboardData();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      navigate('/admin/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  const navigationItems = [
+    { name: 'Dashboard', icon: HomeIcon, id: 'dashboard' },
+    { name: 'Projects', icon: BriefcaseIcon, id: 'projects' },
+    { name: 'Project Overview', icon: ChartBarIcon, id: 'project-overview' },
+    { name: 'Gallery', icon: PhotoIcon, id: 'gallery' },
+    { name: 'Enquiries', icon: UserGroupIcon, id: 'enquiries' },
+    { name: 'Customers', icon: UsersIcon, id: 'customers' },
+    { name: 'Employees', icon: UserGroupIcon, id: 'employees' },
+    { name: 'Blog', icon: NewspaperIcon, id: 'blog' },
+    { name: 'Testimonials', icon: NewspaperIcon, id: 'testimonials' },
+    { name: 'Generate Quotation', icon: DocumentTextIcon, id: 'quotation' },
+    { name: 'Generate Receipt', icon: ReceiptRefundIcon, id: 'receipt' },
+    { name: 'Settings', icon: Cog6ToothIcon, id: 'settings' },
+  ];
+
+  const stats = [
+    { name: 'Total Projects', value: data.totalProjects.toString(), icon: BriefcaseIcon },
+    { name: 'Active Projects', value: data.inProgressProjects.length.toString(), icon: ChartBarIcon },
+    { name: 'Team Members', value: data.teamMembers.toString(), icon: UserGroupIcon },
+    { name: 'Blog Posts', value: data.totalBlogs.toString(), icon: NewspaperIcon },
+  ];
+
+  const formatDate = (date: string) => {
+    if (!date) return 'No date set';
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-50">
+        <div className="text-center max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
+          <div className="text-red-500 mb-4">
+            <svg className="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Dashboard</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return 'bg-green-100 text-green-800';
+      case 'in progress':
+        return 'bg-blue-100 text-blue-800';
+      case 'planning':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const recentProjects = data.recentProjects.map(project => ({
+    name: project.title,
+    status: project.status,
+    date: formatDate(project.dueDate)
+  }));
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      {/* Mobile menu button and header */}
+      <div className="lg:hidden fixed top-0 left-0 z-40 w-full bg-white shadow-sm">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center">
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 rounded-md text-gray-600 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+            >
+              {isMobileMenuOpen ? (
+                <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+              ) : (
+                <Bars3Icon className="h-6 w-6" aria-hidden="true" />
+              )}
+            </button>
+            <h1 className="ml-3 text-lg font-bold text-indigo-600">Virtuous Interiors</h1>
+          </div>
+          <button
+            onClick={handleSignOut}
+            className="p-2 text-red-600 hover:text-red-700 focus:outline-none"
+          >
+            <ArrowLeftOnRectangleIcon className="h-6 w-6" />
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile sidebar */}
+      <div
+        className={`fixed inset-0 z-50 lg:hidden transition-all duration-300 ease-in-out ${
+          isMobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        {/* Backdrop */}
+        <div 
+          className={`absolute inset-0 bg-gray-600 bg-opacity-75 transition-opacity ${
+            isMobileMenuOpen ? 'opacity-100' : 'opacity-0'
+          }`}
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+        
+        {/* Sidebar */}
+        <div
+          className={`absolute inset-y-0 left-0 max-w-xs w-full bg-white shadow-xl transform transition-transform ease-in-out duration-300 ${
+            isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          {/* Close button */}
+          <div className="absolute top-0 right-0 pt-4 pr-4">
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="p-2 rounded-md text-gray-600 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500"
+            >
+              <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="h-full flex flex-col">
+            {/* Mobile menu header */}
+            <div className="px-4 py-3 border-b border-gray-200">
+              <h1 className="text-lg font-bold text-indigo-600">Virtuous Interiors</h1>
+            </div>
+
+            {/* Navigation items */}
+            <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto mt-14">
+              {navigationItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className={`flex items-center w-full px-3 py-3 text-base font-medium rounded-lg transition-colors ${
+                    activeTab === item.id
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-gray-900 hover:bg-indigo-50 hover:text-indigo-600'
+                  }`}
+                >
+                  <item.icon
+                    className={`mr-4 h-6 w-6 flex-shrink-0 ${
+                      activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'
+                    }`}
+                  />
+                  {item.name}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop sidebar */}
+      <div className="hidden lg:flex lg:flex-shrink-0">
+        <div className="flex flex-col w-64">
+          <div className="flex flex-col h-0 flex-1">
+            <div className="flex items-center h-16 flex-shrink-0 px-4 bg-white border-b border-gray-200">
+              <h1 className="text-xl font-bold text-indigo-600">Virtuous Interiors</h1>
+            </div>
+            <div className="flex-1 flex flex-col overflow-y-auto">
+              <nav className="flex-1 px-2 py-4 bg-white space-y-1">
+                {navigationItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md w-full ${
+                      activeTab === item.id
+                        ? 'bg-indigo-600 text-white'
+                        : 'text-gray-600 hover:bg-indigo-50 hover:text-indigo-600'
+                    }`}
+                  >
+                    <item.icon
+                      className={`mr-3 flex-shrink-0 h-6 w-6 ${
+                        activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'
+                      }`}
+                    />
+                    {item.name}
+                  </button>
+                ))}
+              </nav>
+              <div className="flex-shrink-0 flex border-t border-gray-200 p-4">
+                <button
+                  onClick={handleSignOut}
+                  className="flex-shrink-0 w-full group block"
+                >
+                  <div className="flex items-center">
+                    <ArrowLeftOnRectangleIcon className="inline-block h-6 w-6 text-red-400 group-hover:text-red-500" />
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-red-600 group-hover:text-red-700">
+                        Sign Out
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div className="flex-1 overflow-auto">
+        <div className="py-6 px-4 sm:px-6 lg:px-8 mt-16 lg:mt-0">
+          <main className="flex-1 overflow-y-auto">
+            {activeTab === 'dashboard' && (
+              <div className="p-6">
+                <div className="mb-8">
+                  <h2 className="text-2xl font-semibold text-gray-900">Welcome back, Admin</h2>
+                  <p className="mt-1 text-sm text-gray-600">Here's what's happening today.</p>
+                </div>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+                  {stats.map((stat) => (
+                    <div
+                      key={stat.name}
+                      className="bg-white overflow-hidden shadow rounded-lg transition-all hover:shadow-lg"
+                    >
+                      <div className="p-5">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0">
+                            <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
+                              <span className="text-indigo-600 text-xl font-semibold">{stat.value}</span>
+                            </div>
+                          </div>
+                          <div className="ml-5">
+                            <p className="text-sm font-medium text-gray-500 truncate">{stat.name}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Recent Projects */}
+                <div className="bg-white shadow rounded-lg overflow-hidden">
+                  <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900">Recent Projects</h3>
+                  </div>
+                  <div className="divide-y divide-gray-200">
+                    {recentProjects.map((project, index) => (
+                      <div key={index} className="px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex flex-col sm:flex-row sm:items-center">
+                            <p className="text-sm font-medium text-indigo-600 truncate">{project.name}</p>
+                            <p className="mt-1 sm:mt-0 sm:ml-6 text-sm text-gray-500">Due {project.date}</p>
+                          </div>
+                          <div className="ml-2 flex-shrink-0">
+                            <span
+                              className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(project.status)}`}
+                            >
+                              {project.status}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeTab === 'projects' && <ProjectUpload />}
+            {activeTab === 'project-overview' && <ProjectOverview />}
+            {activeTab === 'gallery' && (
+              <>
+                <GalleryUpload />
+                <GalleryManager />
+              </>
+            )}
+            {activeTab === 'enquiries' && <EnquiriesManager />}
+            {activeTab === 'customers' && <CustomerDatabase />}
+            {activeTab === 'employees' && <EmployeeManager />}
+            {activeTab === 'blog' && (
+              <>
+                <BlogUpload />
+                <BlogManager />
+              </>
+            )}
+            {activeTab === 'testimonials' && <TestimonialManager />}
+            {activeTab === 'quotation' && <QuotationGenerator />}
+            {activeTab === 'receipt' && <ReceiptGenerator />}
+            {activeTab === 'settings' && <Settings />}
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;

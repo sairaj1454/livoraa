@@ -1,0 +1,32 @@
+:root {
+  /* Primary Colors */
+  --primary-color: #ef1c1c;
+  --secondary-color: #c60101;
+  --accent-color: #ffd700;
+  
+  /* Background Colors */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  
+  /* Text Colors */
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-light: #ffffff;
+  
+  /* Button Colors */
+  --btn-primary-bg: var(--accent-color);
+  --btn-primary-text: var(--text-light);
+  --btn-hover-bg: #e6c200;
+  
+  /* Border Colors */
+  --border-color: #e0e0e0;
+  
+  /* Status Colors */
+  --success-color: #28a745;
+  --error-color: #dc3545;
+  --warning-color: #ffc107;
+  
+  /* Link Colors */
+  --link-color: #0066cc;
+  --link-hover-color: #0052a3;
+}

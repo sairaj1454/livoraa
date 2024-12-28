@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+# Sitemaps
+Sitemap: https://virtuousinteriors.com/sitemap.xml
+
+# Optimize crawling
+Crawl-delay: 1
+
+# Prevent duplicate content
+Disallow: /admin/
+Disallow: /*?*
+Disallow: /*?
