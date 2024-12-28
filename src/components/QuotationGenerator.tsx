@@ -151,8 +151,12 @@ const QuotationGenerator = () => {
         if (field === 'item') {
           updatedItem.item = value as string;
           updatedItem.price = customItems[value as string] || 0;
-        } else {
-          updatedItem[field] = value;
+        } else if (field === 'd1' || field === 'd2') {
+          updatedItem[field] = value as number;
+        } else if (field === 'price' || field === 'totalAmount' || field === 'area') {
+          updatedItem[field] = value as number;
+        } else if (field === 'room' || field === 'type') {
+          updatedItem[field] = value as string;
         }
 
         // Calculate area and total amount
