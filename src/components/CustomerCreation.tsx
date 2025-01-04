@@ -4,6 +4,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 import { toast } from 'react-toastify';
 import { UserPlusIcon, KeyIcon, PhoneIcon, EnvelopeIcon, HomeIcon, UserIcon } from '@heroicons/react/24/outline';
+import emailjs from '@emailjs/browser';
 
 interface CustomerData {
   name: string;
@@ -81,25 +82,34 @@ const CustomerCreation: React.FC = () => {
         role: 'customer'
       });
 
-      // Send credentials via email
+      // Send credentials via EmailJS
       try {
-        const apiUrl = window.location.origin + '/api/send-credentials';
-        
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-            name: formData.name,
-            phone: formData.phone
-          }),
-        });
+        const emailResponse = await emailjs.send(
+          'service_z7kagc4',
+          'template_38nrv0k',
+          {
+            to_email: formData.email,
+            to_name: formData.name,
+            subject: 'Your Virtuous Interiors Login Credentials',
+            message: `Dear ${formData.name},
 
-        if (!response.ok) {
+Thank you for registering with Virtuous Interiors! Here are your login credentials:
+
+Email: ${formData.email}
+Password: ${formData.password}
+Phone: ${formData.phone}
+
+Please keep these credentials safe and change your password after your first login.
+
+Best regards,
+Team Virtuous Interiors`
+          },
+          'wGzsvi5X7v8prOba-'
+        );
+
+        if (emailResponse.status === 200) {
+          toast.success('Login credentials sent to customer email');
+        } else {
           throw new Error('Failed to send credentials email');
         }
       } catch (error) {

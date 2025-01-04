@@ -64,6 +64,14 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+
+// Start the server
+if (process.env.NODE_ENV === 'production') {
+  // In production, start the Express server
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+} else {
+  // In development, export the app for potential different configuration
+  module.exports = app;
+}
