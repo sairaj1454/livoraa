@@ -19,6 +19,9 @@ import Dashboard from './pages/admin/Dashboard'
 import ProtectedRoute from './components/ProtectedRoute'
 import Testimonials from './components/Testimonials'
 import ScrollToTop from './components/ScrollToTop';
+import CustomerLogin from './pages/customer/Login';
+import CustomerDashboard from './pages/customer/Dashboard';
+import CustomerProtectedRoute from './components/CustomerProtectedRoute';
 
 // Initialize EmailJS
 emailjs.init('wGzsvi5X7v8prOba-');
@@ -35,6 +38,23 @@ const AdminRoutes = () => {
             <Dashboard />
           </ProtectedRoute>
         } 
+      />
+    </Routes>
+  )
+}
+
+// Customer Routes Component
+const CustomerRoutes = () => {
+  return (
+    <Routes>
+      <Route path="/login" element={<CustomerLogin />} />
+      <Route
+        path="/dashboard/*"
+        element={
+          <CustomerProtectedRoute>
+            <CustomerDashboard />
+          </CustomerProtectedRoute>
+        }
       />
     </Routes>
   )
@@ -72,19 +92,21 @@ const MainWebsiteRoutes = () => {
 function App() {
   return (
     <Router>
-      <ScrollToTop />
-      <div className="min-h-screen flex flex-col">
-        <Routes>
-          {/* Admin section - completely separate */}
-          <Route path="/admin/*" element={<AdminRoutes />} />
-          
-          {/* Main website - everything else */}
-          <Route path="/*" element={<MainWebsiteRoutes />} />
-        </Routes>
+        <ScrollToTop />
+        <div className="min-h-screen flex flex-col">
+          <Routes>
+            {/* Admin section - completely separate */}
+            <Route path="/admin/*" element={<AdminRoutes />} />
+            {/* Customer section - completely separate */}
+            <Route path="/customer/*" element={<CustomerRoutes />} />
+            {/* Main website */}
+            <Route path="/*" element={<MainWebsiteRoutes />} />
+          </Routes>
+        </div>
         <ToastContainer position="bottom-right" />
-      </div>
+      
     </Router>
-  )
+  );
 }
 
 export default App

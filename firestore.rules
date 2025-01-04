@@ -1,0 +1,144 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    // Helper function to validate employee data
+    function isValidEmployee() {
+      let employee = request.resource.data;
+      return employee.name is string && employee.name.size() > 0 &&
+             employee.email is string && employee.email.matches('^[^@]+@[^@]+\\.[^@]+$') &&
+             employee.phone is string && employee.phone.size() > 0 &&
+             employee.position is string && employee.position.size() > 0 &&
+             employee.salary is number && employee.salary >= 0 &&
+             employee.status in ['active', 'inactive'];
+    }
+
+    // Helper function to validate project data
+    function isValidProject() {
+      let project = request.resource.data;
+      return project.title is string && project.title.size() > 0 &&
+             project.client is string && project.client.size() > 0 &&
+             project.clientEmail.matches('^[^@]+@[^@]+\\.[^@]+$') &&
+             project.clientPhone.matches('^[0-9]{10}$') &&
+             project.payments.totalAmount >= 0 &&
+             project.payments.advanceAmount >= 0 &&
+             project.payments.advanceAmount <= project.payments.totalAmount;
+    }
+
+    // Helper function to validate quotation data
+    function isValidQuotation() {
+      let quotation = request.resource.data;
+      return quotation.clientId is string &&
+             quotation.clientName is string &&
+             quotation.siteCode is string &&
+             quotation.siteAddress is string &&
+             quotation.version is string &&
+             quotation.date is string &&
+             quotation.items is list &&
+             quotation.total is number &&
+             quotation.timestamp is timestamp;
+    }
+
+    // Employee collection rules
+    match /employees/{employeeId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidEmployee();
+      allow update: if isAdmin() && isValidEmployee();
+      allow delete: if isAdmin();
+    }
+
+    // Projects collection rules
+    match /projects/{projectId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidProject();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Customers collection rules
+    match /customers/{customerId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Quotations collection rules
+    match /quotations/{quotationId} {
+      allow read: if isAdmin() || (request.auth != null && 
+               request.auth.token.email == resource.data.customerEmail);
+      allow create: if isAdmin() && isValidQuotation();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Clients collection and quotations subcollection rules
+    match /clients/{clientId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+      
+      match /quotations/{quotationId} {
+        allow read: if isAdmin() || (request.auth != null && 
+                 request.auth.token.email == resource.data.customerEmail);
+        allow create: if isAdmin() && isValidQuotation();
+        allow update: if isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // Gallery rules - only admin can write, anyone can read
+    match /gallery/{document} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Enquiries rules - anyone can create, only admin can read
+    match /enquiries/{document} {
+      allow create: if true;  // Allow public form submissions
+      allow read: if isAdmin();  // Only admin can view enquiries
+      allow update, delete: if isAdmin();  // Only admin can modify/delete
+    }
+
+    // Blog rules - only admin can write, anyone can read
+    match /blogs/{document} {
+      allow read: if true;  // Allow public access to read blog posts
+      allow create, update, delete: if isAdmin();  // Only admin can manage blogs
+      
+      // Blog validation
+      allow create: if isAdmin()
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 100
+        && request.resource.data.content.size() > 0
+        && request.resource.data.authorName.size() > 0
+        && request.resource.data.category.size() > 0
+        && request.resource.data.imageData.size() > 0;
+    }
+
+    // Testimonials rules - only admin can write, anyone can read
+    match /testimonials/{document} {
+      allow read: if true;  // Allow public access to read testimonials
+      allow create, update, delete: if isAdmin();  // Only admin can manage testimonials
+      
+      // Testimonial validation
+      allow create: if isAdmin()
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 100
+        && request.resource.data.content.size() > 0
+        && request.resource.data.content.size() <= 500
+        && request.resource.data.date is string
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+    }
+
+    // Function to validate image size
+    function isValidImage() {
+      let maxSize = 5 * 1024 * 1024;  // 5MB in bytes
+      return request.resource.data.imageData.size() <= maxSize;
+    }
+  }
+}

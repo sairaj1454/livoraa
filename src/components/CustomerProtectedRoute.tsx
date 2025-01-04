@@ -1,12 +1,12 @@
 import { ReactNode } from 'react';
 
-interface ProtectedRouteProps {
+interface Props {
   children: ReactNode;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+const CustomerProtectedRoute: React.FC<Props> = ({ children }) => {
   // For now, always render children since we're removing auth
   return <>{children}</>;
 };
 
-export default ProtectedRoute;
+export default CustomerProtectedRoute;

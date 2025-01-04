@@ -1,30 +1,43 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { db } from '../config/firebase';
+import { collection, getDocs, addDoc, doc, setDoc, query, where, getDoc } from 'firebase/firestore';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import autoTable from 'jspdf-autotable';
+import CustomerSearchPopup from './CustomerSearchPopup';
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { Customer, QuotationItem, Quotation } from '../types';
 
-interface QuotationItem {
-  id: string;
-  room: string;
-  item: string;
-  d1: number;
-  d2: number;
-  type: string;
-  area: number;
-  price: number;
-  totalAmount: number;
+interface ItemType {
+  name: string;
+  rate: number;
+  isLumpsum: boolean;
 }
 
-// Utility functions for consistent price formatting
-const formatPrice = (price: number): string => {
-  return price.toLocaleString('en-IN');
-};
-
-const parsePrice = (price: string): number => {
-  return parseInt(price.replace(/[^0-9]/g, '')) || 0;
-};
+interface QuotationData {
+  clientId: string;
+  clientName: string;
+  customerEmail: string;
+  siteCode: string;
+  siteAddress: string;
+  version: string;
+  date: string;
+  items: QuotationItem[];
+  falseCeiling: string;
+  electrical: string;
+  painting: string;
+  falseCeilingDesc: string;
+  electricalDesc: string;
+  paintingDesc: string;
+  terms: string[];
+  total: number;
+  timestamp: Date;
+}
 
 const QuotationGenerator = () => {
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [siteCode, setSiteCode] = useState('');
   const [siteAddress, setSiteAddress] = useState('');
   const [clientName, setClientName] = useState('');
@@ -42,29 +55,43 @@ const QuotationGenerator = () => {
   const [newRoomName, setNewRoomName] = useState('');
   const [editingRoom, setEditingRoom] = useState<{oldName: string, newName: string} | null>(null);
 
-  const [customItems, setCustomItems] = useState<{[key: string]: number}>({
-    'Box (Below Platform)': 102465,
-    'Above Platform': 50400,
-    'Frame': 35600,
-    'Baskets': 35000,
-    'Wardrobe': 61600,
-    'Loft': 11200,
-    'Dressing': 14300,
-    'Cot': 55000,
-    'Book shelf': 10800,
-    'TV Unit': 75600,
-    'Partition': 48000,
-    'Crockery & Pooja room': 95200,
-    'Wash Unit': 13800,
-    'BF Counter': 10000,
-    'Shoe rack': 15000,
-    'Box': 7500,
-  });
+  const [customItems, setCustomItems] = useState<string[]>([
+    'Box (Below Platform)',
+    'Above Platform',
+    'Frame',
+    'Baskets',
+    'Wardrobe',
+    'Loft',
+    'Dressing',
+    'Cot',
+    'Book shelf',
+    'TV Unit',
+    'Partition',
+    'Crockery & Pooja room',
+    'Wash Unit',
+    'BF Counter',
+    'Shoe rack',
+    'Box'
+  ]);
 
   const [newItemName, setNewItemName] = useState('');
+  const [editingItem, setEditingItem] = useState<{oldName: string, newName: string} | null>(null);
+
+  const [itemTypes, setItemTypes] = useState<ItemType[]>([
+    { name: 'Box', rate: 7500, isLumpsum: false },
+    { name: 'Frame', rate: 35600, isLumpsum: false },
+    { name: 'TV Unit', rate: 75600, isLumpsum: false },
+    { name: 'Wardrobe', rate: 61600, isLumpsum: false },
+    { name: 'Partition', rate: 48000, isLumpsum: false },
+  ]);
+
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeRate, setNewTypeRate] = useState(0);
+  const [newTypeIsLumpsum, setNewTypeIsLumpsum] = useState(false);
+  const [editingType, setEditingType] = useState<ItemType | null>(null);
+
   const [newItemPrice, setNewItemPrice] = useState(0);
 
-  const [editingItem, setEditingItem] = useState<string | null>(null);
   const [editingPrice, setEditingPrice] = useState<number>(0);
 
   const [terms, setTerms] = useState<string[]>([
@@ -77,69 +104,174 @@ const QuotationGenerator = () => {
   const [newTerm, setNewTerm] = useState('');
   const [editingTerm, setEditingTerm] = useState<{index: number, text: string} | null>(null);
 
-  const addCustomItem = () => {
-    if (newItemName && newItemPrice > 0) {
-      setCustomItems(prev => ({
-        ...prev,
-        [newItemName]: newItemPrice
-      }));
-      setNewItemName('');
-      setNewItemPrice(0);
+  const [isCustomerPopupOpen, setIsCustomerPopupOpen] = useState(false);
+
+  const fetchLatestQuotation = async (customerId: string) => {
+    try {
+      const quotationsRef = collection(db, 'quotations');
+      const q = query(
+        quotationsRef,
+        where('clientId', '==', customerId)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      // Reset form data first
+      setSiteCode('');
+      setSiteAddress('');
+      setClientName('');
+      setVersion('V1'); // Default to V1
+      setDate(new Date().toLocaleDateString('en-GB'));
+      setItems([]);
+      setFalseCeiling('0');
+      setElectrical('0');
+      setPainting('0');
+      setFalseCeilingDesc('');
+      setElectricalDesc('');
+      setPaintingDesc('');
+      
+      if (querySnapshot.docs.length > 0) {
+        // If quotation exists, use its data
+        const latestDoc = querySnapshot.docs[0];
+        const data = latestDoc.data() as Quotation;
+        const latestQuotation = {
+          ...data,
+          id: latestDoc.id,
+        };
+
+        setSiteCode(latestQuotation.siteCode || '');
+        setSiteAddress(latestQuotation.siteAddress || '');
+        setClientName(latestQuotation.clientName || '');
+        
+        const currentVersion = latestQuotation.version || 'V1';
+        const versionNumber = parseInt(currentVersion.substring(1)) + 1;
+        setVersion(`V${versionNumber}`);
+        
+        setItems(latestQuotation.items || []);
+        setFalseCeiling(latestQuotation.falseCeiling || '0');
+        setElectrical(latestQuotation.electrical || '0');
+        setPainting(latestQuotation.painting || '0');
+        setFalseCeilingDesc(latestQuotation.falseCeilingDesc || '');
+        setElectricalDesc(latestQuotation.electricalDesc || '');
+        setPaintingDesc(latestQuotation.paintingDesc || '');
+
+        toast.info('Loaded latest quotation details');
+      } else {
+        // If no quotation exists, fetch customer details from database
+        const customerDoc = await getDoc(doc(db, 'customers', customerId));
+        if (customerDoc.exists()) {
+          const customerData = customerDoc.data();
+          setClientName(customerData.name || '');
+          
+          // Construct address from customer data
+          const addressParts = [];
+          if (customerData.address?.street?.trim()) addressParts.push(customerData.address.street);
+          if (customerData.address?.city?.trim()) addressParts.push(customerData.address.city);
+          if (customerData.address?.state?.trim()) addressParts.push(customerData.address.state);
+          if (customerData.address?.pincode?.trim()) addressParts.push(customerData.address.pincode);
+          
+          setSiteAddress(addressParts.join(', '));
+          setVersion('V1'); // Set to V1 for new quotation
+          
+          toast.info('Started new quotation with customer details');
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast.error('Error loading data');
     }
   };
 
-  const startEditing = (itemName: string, price: number) => {
-    setEditingItem(itemName);
-    setEditingPrice(price);
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const customersCollection = collection(db, 'customers');
+        const customersSnapshot = await getDocs(customersCollection);
+        const customersList = customersSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Customer));
+        setCustomers(customersList);
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+      }
+    };
+
+    fetchCustomers();
+  }, []);
+
+  const handleCustomerSelect = (customerId: string) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (customer) {
+      setSelectedCustomer(customerId);
+      setClientName(customer.name || '');
+      
+      // Only include non-empty address components
+      const addressParts = [];
+      if (customer.address?.street?.trim()) addressParts.push(customer.address.street);
+      if (customer.address?.city?.trim()) addressParts.push(customer.address.city);
+      if (customer.address?.state?.trim()) addressParts.push(customer.address.state);
+      if (customer.address?.pincode?.trim()) addressParts.push(customer.address.pincode);
+      
+      setSiteAddress(addressParts.join(', '));
+      fetchLatestQuotation(customerId);
+    }
   };
 
-  const saveEditedPrice = () => {
-    if (editingItem) {
-      setCustomItems(prev => ({
-        ...prev,
-        [editingItem]: editingPrice
-      }));
+  const addCustomItem = () => {
+    if (newItemName && !customItems.includes(newItemName)) {
+      setCustomItems([...customItems, newItemName]);
+      setNewItemName('');
+    } else if (customItems.includes(newItemName)) {
+      alert('Item already exists!');
+    }
+  };
 
-      // Update all existing items with this name to use the new price
-      const updatedItems = items.map(item => {
-        if (item.item === editingItem) {
-          return {
-            ...item,
-            price: editingPrice,
-            totalAmount: item.area * editingPrice
-          };
-        }
-        return item;
-      });
+  const startEditingItem = (itemName: string) => {
+    setEditingItem({ oldName: itemName, newName: itemName });
+  };
+
+  const saveEditedItem = () => {
+    if (editingItem) {
+      if (customItems.includes(editingItem.newName) && editingItem.oldName !== editingItem.newName) {
+        alert('Item name already exists!');
+        return;
+      }
+
+      setCustomItems(customItems.map(item => 
+        item === editingItem.oldName ? editingItem.newName : item
+      ));
+
+      // Update all existing items with this name
+      const updatedItems = items.map(item => ({
+        ...item,
+        item: item.item === editingItem.oldName ? editingItem.newName : item.item
+      }));
       setItems(updatedItems);
 
       setEditingItem(null);
-      setEditingPrice(0);
     }
   };
 
   const deleteCustomItem = (itemName: string) => {
     if (window.confirm(`Are you sure you want to delete ${itemName}?`)) {
-      const { [itemName]: _, ...remainingItems } = customItems;
-      setCustomItems(remainingItems);
-
+      setCustomItems(customItems.filter(item => item !== itemName));
       // Remove this item from any rooms using it
-      const updatedItems = items.filter(item => item.item !== itemName);
-      setItems(updatedItems);
+      setItems(items.filter(item => item.item !== itemName));
     }
   };
 
   const addItem = (room: string) => {
+    const defaultType = itemTypes[0]?.name || '';
+    const defaultRate = itemTypes[0]?.rate || 0;
     const newItem = {
       id: Math.random().toString(36).substr(2, 9),
       room,
-      item: Object.keys(customItems)[0],
+      item: customItems[0],
       d1: 0,
       d2: 0,
-      type: 'Box',
+      type: defaultType,
       area: 0,
-      price: Object.values(customItems)[0],
-      totalAmount: 0
+      price: defaultRate,
     };
     setItems([...items, newItem]);
   };
@@ -150,19 +282,32 @@ const QuotationGenerator = () => {
         const updatedItem = { ...item };
         if (field === 'item') {
           updatedItem.item = value as string;
-          updatedItem.price = customItems[value as string] || 0;
         } else if (field === 'd1' || field === 'd2') {
           updatedItem[field] = value as number;
-        } else if (field === 'price' || field === 'totalAmount' || field === 'area') {
+        } else if (field === 'type') {
+          updatedItem.type = value as string;
+          // Update price based on selected type
+          const selectedType = itemTypes.find(type => type.name === value);
+          if (selectedType) {
+            updatedItem.price = selectedType.rate;
+            if (selectedType.isLumpsum) {
+              updatedItem.d1 = 1;
+              updatedItem.d2 = 1;
+              updatedItem.area = 1;
+            }
+          }
+        } else if (field === 'price' || field === 'area') {
           updatedItem[field] = value as number;
-        } else if (field === 'room' || field === 'type') {
+        } else if (field === 'room') {
           updatedItem[field] = value as string;
         }
 
-        // Calculate area and total amount
-        if (field === 'd1' || field === 'd2' || field === 'item') {
-          updatedItem.area = updatedItem.d1 * updatedItem.d2;
-          updatedItem.totalAmount = updatedItem.area * updatedItem.price;
+        // Calculate area and update price only for non-lumpsum items
+        const selectedType = itemTypes.find(type => type.name === updatedItem.type);
+        if (field === 'd1' || field === 'd2' || field === 'type') {
+          if (!selectedType?.isLumpsum) {
+            updatedItem.area = updatedItem.d1 * updatedItem.d2;
+          }
         }
         return updatedItem;
       }
@@ -219,11 +364,17 @@ const QuotationGenerator = () => {
   };
 
   const calculateSubtotal = (): number => {
-    return items.reduce((sum, item) => sum + item.totalAmount, 0);
+    return items.reduce((sum, item) => sum + (item.price * item.area), 0);
   };
 
   const calculateTotal = (): number => {
-    return calculateSubtotal() + parsePrice(falseCeiling) + parsePrice(electrical) + parsePrice(painting);
+    let total = calculateSubtotal();
+    
+    if (falseCeiling && parseInt(falseCeiling) > 0) total += parseInt(falseCeiling);
+    if (electrical && parseInt(electrical) > 0) total += parseInt(electrical);
+    if (painting && parseInt(painting) > 0) total += parseInt(painting);
+    
+    return total;
   };
 
   const addTerm = () => {
@@ -260,6 +411,82 @@ const QuotationGenerator = () => {
     }
   };
 
+  const addItemType = () => {
+    if (newTypeName && newTypeRate > 0) {
+      setItemTypes([...itemTypes, { name: newTypeName, rate: newTypeRate, isLumpsum: newTypeIsLumpsum }]);
+      setNewTypeName('');
+      setNewTypeRate(0);
+      setNewTypeIsLumpsum(false);
+    }
+  };
+
+  const startEditingType = (type: ItemType) => {
+    setEditingType({ ...type });
+  };
+
+  const saveEditedType = () => {
+    if (editingType) {
+      // Check if another type with the new name exists (except for the current type)
+      const typeExists = itemTypes.some(type => 
+        type.name === editingType.name && type.name !== editingType.name
+      );
+
+      if (typeExists) {
+        alert('A type with this name already exists!');
+        return;
+      }
+
+      setItemTypes(itemTypes.map(type => 
+        type.name === editingType.name ? editingType : type
+      ));
+
+      // Update all items using this type
+      setItems(items.map(item => {
+        if (item.type === editingType.name) {
+          return {
+            ...item,
+            price: editingType.rate
+          };
+        }
+        return item;
+      }));
+
+      setEditingType(null);
+    }
+  };
+
+  const deleteItemType = (typeName: string) => {
+    if (window.confirm(`Are you sure you want to delete ${typeName}?`)) {
+      setItemTypes(itemTypes.filter(type => type.name !== typeName));
+    }
+  };
+
+  const hasAdditionalServices = () => {
+    return (
+      (falseCeiling !== '' && parseInt(falseCeiling) > 0) ||
+      (electrical !== '' && parseInt(electrical) > 0) ||
+      (painting !== '' && parseInt(painting) > 0)
+    );
+  };
+
+  const getAdditionalServicesData = () => {
+    const services = [];
+    
+    if (falseCeiling !== '' && parseInt(falseCeiling) > 0) {
+      services.push(['False Ceiling', `₹${parseInt(falseCeiling).toLocaleString('en-IN')}`, falseCeilingDesc || '-']);
+    }
+    
+    if (electrical !== '' && parseInt(electrical) > 0) {
+      services.push(['Electrical', `₹${parseInt(electrical).toLocaleString('en-IN')}`, electricalDesc || '-']);
+    }
+    
+    if (painting !== '' && parseInt(painting) > 0) {
+      services.push(['Painting', `₹${parseInt(painting).toLocaleString('en-IN')}`, paintingDesc || '-']);
+    }
+    
+    return services;
+  };
+
   const generatePDF = () => {
     const doc = new jsPDF();
     
@@ -287,7 +514,7 @@ const QuotationGenerator = () => {
     doc.setFontSize(14);
     doc.setTextColor(primaryColor);
     doc.setFont('helvetica', 'bold');
-    doc.text('QUOTATION', 15, 55);
+    doc.text('QUOTATION / ESTIMATION', 15, 55);
     
     // Client details in a professional layout with two columns
     doc.setFillColor(bgColor);
@@ -335,7 +562,7 @@ const QuotationGenerator = () => {
     // Calculate room totals
     const roomTotals: { [key: string]: number } = {};
     Object.entries(itemsByRoom).forEach(([room, items]) => {
-      roomTotals[room] = items.reduce((sum, item) => sum + item.totalAmount, 0);
+      roomTotals[room] = items.reduce((sum, item) => sum + (item.price * item.area), 0);
     });
 
     // Create tables room by room
@@ -349,19 +576,31 @@ const QuotationGenerator = () => {
       currentY += 8;
 
       // Room items table
-      const tableData = roomItems.map(item => [
-        item.item,
-        item.d1.toString(),
-        item.d2.toString(),
-        item.type,
-        item.area.toFixed(2),
-        formatPrice(item.price),
-        formatPrice(item.totalAmount)
-      ]);
+      const tableData = roomItems.map(item => {
+        const selectedType = itemTypes.find(type => type.name === item.type);
+        if (selectedType?.isLumpsum) {
+          return [
+            item.item,
+            '-',
+            '-',
+            item.type,
+            '-',
+            item.price.toLocaleString('en-IN')
+          ];
+        }
+        return [
+          item.item,
+          item.d1.toString(),
+          item.d2.toString(),
+          item.type,
+          item.area.toFixed(2),
+          (item.price * item.area).toLocaleString('en-IN')
+        ];
+      });
 
       autoTable(doc, {
         startY: currentY,
-        head: [['Item', 'D1', 'D2', 'Type', 'Area', 'Price', 'Total']],
+        head: [['Item', 'D1', 'D2', 'Type', 'Area', 'Rate']],
         body: tableData,
         theme: 'grid',
         styles: {
@@ -372,8 +611,8 @@ const QuotationGenerator = () => {
           halign: 'left', // Default alignment
         },
         columnStyles: {
-          5: { halign: 'right' }, // Price column right-aligned
-          6: { halign: 'right' }, // Total column right-aligned
+          4: { halign: 'right' }, // Area column right-aligned
+          5: { halign: 'right' }, // Rate column right-aligned
         },
         headStyles: {
           fillColor: secondaryColor,
@@ -392,7 +631,7 @@ const QuotationGenerator = () => {
       doc.setFontSize(10);
       doc.setTextColor(primaryColor);
       doc.setFont('helvetica', 'bold');
-      const roomTotalText = `Room Total: ${formatPrice(roomTotals[room])}`;
+      const roomTotalText = `Room Total: ${roomTotals[room].toLocaleString('en-IN')}`;
       const textWidth = doc.getTextWidth(roomTotalText);
       const pageWidth = doc.internal.pageSize.width;
       doc.text(roomTotalText, (pageWidth - textWidth) / 2, currentY);
@@ -406,73 +645,71 @@ const QuotationGenerator = () => {
     });
 
     // Additional Services Section
-    currentY += 10;
-    
-    // Additional Services Header
-    doc.setFillColor(primaryColor);
-    doc.rect(15, currentY, 180, 8, 'F');
-    doc.setFontSize(11);
-    doc.setTextColor('#FFFFFF');
-    doc.text('Additional Services', 20, currentY + 5.5);
-    currentY += 8;
+    if (hasAdditionalServices()) {
+      currentY += 10;
+      
+      // Additional Services Header
+      doc.setFillColor(primaryColor);
+      doc.rect(15, currentY, 180, 8, 'F');
+      doc.setFontSize(11);
+      doc.setTextColor('#FFFFFF');
+      doc.text('Additional Services', 20, currentY + 5.5);
+      currentY += 8;
 
-    // Additional Services Table
-    const additionalServicesData = [
-      ['False Ceiling', formatPrice(parsePrice(falseCeiling)), falseCeilingDesc || ''],
-      ['Electrical', formatPrice(parsePrice(electrical)), electricalDesc || ''],
-      ['Painting', formatPrice(parsePrice(painting)), paintingDesc || '']
-    ];
+      // Additional Services Table
+      const additionalServicesData = getAdditionalServicesData();
 
-    autoTable(doc, {
-      startY: currentY,
-      head: [['Service', 'Amount', 'Description']],
-      body: additionalServicesData,
-      theme: 'grid',
-      styles: {
-        fontSize: 9,
-        cellPadding: 3,
-        lineColor: accentColor,
-        lineWidth: 0.1,
-      },
-      columnStyles: {
-        0: { cellWidth: 40 },
-        1: { cellWidth: 30, halign: 'right' },
-        2: { cellWidth: 'auto' }
-      },
-      headStyles: {
-        fillColor: secondaryColor,
-        textColor: '#FFFFFF',
-        fontStyle: 'bold',
-      },
-      alternateRowStyles: {
-        fillColor: bgColor,
-      },
-      margin: { left: 15, right: 15 }
-    });
+      autoTable(doc, {
+        startY: currentY,
+        head: [['Service', 'Amount', 'Description']],
+        body: additionalServicesData,
+        theme: 'grid',
+        styles: {
+          fontSize: 9,
+          cellPadding: 3,
+          lineColor: accentColor,
+          lineWidth: 0.1,
+        },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 30, halign: 'right' },
+          2: { cellWidth: 'auto' }
+        },
+        headStyles: {
+          fillColor: secondaryColor,
+          textColor: '#FFFFFF',
+          fontStyle: 'bold',
+        },
+        alternateRowStyles: {
+          fillColor: bgColor,
+        },
+        margin: { left: 15, right: 15 }
+      });
 
-    currentY = (doc as any).lastAutoTable.finalY + 10;
+      currentY = (doc as any).lastAutoTable.finalY + 10;
 
-    // Additional Services Total
-    const additionalTotal = parsePrice(falseCeiling) + parsePrice(electrical) + parsePrice(painting);
-    doc.setFontSize(10);
-    doc.setTextColor(primaryColor);
-    doc.setFont('helvetica', 'bold');
-    const additionalTotalText = `Additional Services Total: ${formatPrice(additionalTotal)}`;
-    const textWidth = doc.getTextWidth(additionalTotalText);
-    const pageWidth = doc.internal.pageSize.width;
-    doc.text(additionalTotalText, (pageWidth - textWidth) / 2, currentY);
-    currentY += 15;
+      // Additional Services Total
+      const additionalTotal = parseInt(falseCeiling) + parseInt(electrical) + parseInt(painting);
+      doc.setFontSize(10);
+      doc.setTextColor(primaryColor);
+      doc.setFont('helvetica', 'bold');
+      const additionalTotalText = `Additional Services Total: ${additionalTotal.toLocaleString('en-IN')}`;
+      const textWidth = doc.getTextWidth(additionalTotalText);
+      const pageWidth = doc.internal.pageSize.width;
+      doc.text(additionalTotalText, (pageWidth - textWidth) / 2, currentY);
+      currentY += 15;
+    }
 
     // Grand total with emphasis
     const total = Object.values(roomTotals).reduce((sum, roomTotal) => sum + roomTotal, 0);
-    const grandTotal = total + parsePrice(falseCeiling) + parsePrice(electrical) + parsePrice(painting);
+    const grandTotal = total + parseInt(falseCeiling) + parseInt(electrical) + parseInt(painting);
     
     doc.setFillColor(primaryColor);
     doc.rect(15, currentY, 180, 10, 'F');
     doc.setFontSize(12);
     doc.setTextColor('#FFFFFF');
     doc.setFont('helvetica', 'bold');
-    doc.text(`Grand Total: ${formatPrice(grandTotal)}`, 20, currentY + 6);
+    doc.text(`Grand Total: ${grandTotal.toLocaleString('en-IN')}`, 20, currentY + 6);
 
     // Terms and conditions section
     currentY += 20;
@@ -507,79 +744,152 @@ const QuotationGenerator = () => {
     doc.save(`Quotation_${clientName}_${version}.pdf`);
   };
 
+  const clearAllFields = () => {
+    setSelectedCustomer('');
+    setSiteCode('');
+    setSiteAddress('');
+    setClientName('');
+    setVersion('V1');
+    setDate(new Date().toLocaleDateString('en-GB'));
+    setItems([]);
+    setFalseCeiling('0');
+    setElectrical('0');
+    setPainting('0');
+    setFalseCeilingDesc('');
+    setElectricalDesc('');
+    setPaintingDesc('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    generatePDF();
+    try {
+      const quotationData: QuotationData = {
+        clientId: selectedCustomer,
+        clientName,
+        customerEmail: customers.find(c => c.id === selectedCustomer)?.email || '',
+        siteCode,
+        siteAddress,
+        version,
+        date,
+        items,
+        falseCeiling,
+        electrical,
+        painting,
+        falseCeilingDesc,
+        electricalDesc,
+        paintingDesc,
+        terms,
+        total: calculateTotal(),
+        timestamp: new Date()
+      };
+
+      const quotationsRef = collection(db, 'quotations');
+      await addDoc(quotationsRef, quotationData);
+      toast.success('Quotation saved successfully!', {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true
+      });
+      clearAllFields(); // Clear all fields after successful save
+    } catch (error) {
+      console.error('Error saving quotation:', error);
+      toast.error('Error saving quotation. Please try again.');
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-4 sm:py-8 px-2 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <ToastContainer />
+      <div className="max-w-7xl mx-auto space-y-8">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mb-4 sm:mb-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-0">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 text-center sm:text-left">Quotation Generator</h1>
-              <p className="mt-1 text-sm text-gray-500 text-center sm:text-left">Create professional quotations for your interior projects</p>
+        <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="text-center sm:text-left">
+              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">Quotation Generator</h1>
+              <p className="mt-2 text-lg text-gray-600">Create professional quotations for your interior projects</p>
             </div>
-            <img src="/images/portfolio/new.png" alt="Logo" className="h-12 sm:h-16 w-auto" />
+            <img src="/images/portfolio/new.png" alt="Logo" className="h-16 sm:h-20 w-auto object-contain" />
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-8">
+        <form onSubmit={handleSubmit} className="space-y-8">
           {/* Client Information Card */}
-          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6">Client Information</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-              <div>
+          <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
+            <div className="border-b border-gray-200 pb-4 mb-6">
+              <h2 className="text-2xl font-semibold text-gray-900">Client Information</h2>
+              <p className="mt-1 text-sm text-gray-500">Enter the client and project details</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Select Customer</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customers.find(c => c.id === selectedCustomer)?.name || ''}
+                    readOnly
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-black"
+                    placeholder="Click to select customer"
+                    onClick={() => setIsCustomerPopupOpen(true)}
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                    <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Site Code</label>
                 <input
                   type="text"
                   value={siteCode}
                   onChange={(e) => setSiteCode(e.target.value)}
                   required
-                  className="mt-1 block w-full rounded-md border-2 border-black px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
+                  className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                   placeholder="Enter site code"
                 />
               </div>
-              <div>
+              <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Date</label>
                 <input
                   type="text"
                   value={date}
                   readOnly
-                  className="mt-1 block w-full rounded-md border-2 border-black bg-gray-50 shadow-sm sm:text-sm text-black"
+                  className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 bg-gray-50 shadow-sm sm:text-sm text-black"
                 />
               </div>
-              <div>
+              <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Version</label>
                 <input
                   type="text"
                   value={version}
-                  onChange={(e) => setVersion(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-2 border-black px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
-                  placeholder="Enter version"
+                  readOnly
+                  className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 bg-gray-50 shadow-sm sm:text-sm text-black"
+                  placeholder="Version will be auto-generated"
                 />
               </div>
-              <div>
+              <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Client Name</label>
                 <input
                   type="text"
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   required
-                  className="mt-1 block w-full rounded-md border-2 border-black px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
+                  className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                   placeholder="Enter client name"
                 />
               </div>
-              <div className="md:col-span-2 lg:col-span-4">
+              <div className="sm:col-span-2 lg:col-span-4 space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Site Address</label>
-                <input
-                  type="text"
+                <textarea
                   value={siteAddress}
                   onChange={(e) => setSiteAddress(e.target.value)}
                   required
-                  className="mt-1 block w-full rounded-md border-2 border-black px-3 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
+                  rows={2}
+                  className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                   placeholder="Enter complete site address"
                 />
               </div>
@@ -587,53 +897,55 @@ const QuotationGenerator = () => {
           </div>
 
           {/* Room Management */}
-          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4 sm:gap-0">
-              <div>
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Room Management</h2>
-                <p className="mt-1 text-sm text-gray-500">Add and manage rooms for your project</p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
-                <input
-                  type="text"
-                  value={newRoomName}
-                  onChange={(e) => setNewRoomName(e.target.value)}
-                  className="rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black w-full sm:w-auto"
-                  placeholder="Enter room name"
-                />
-                <button
-                  type="button"
-                  onClick={addRoom}
-                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-full sm:w-auto"
-                >
-                  Add Room
-                </button>
+          <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
+            <div className="border-b border-gray-200 pb-4 mb-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-semibold text-gray-900">Room Management</h2>
+                  <p className="mt-1 text-sm text-gray-500">Add and manage rooms for your project</p>
+                </div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                  <input
+                    type="text"
+                    value={newRoomName}
+                    onChange={(e) => setNewRoomName(e.target.value)}
+                    className="rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 w-full sm:w-48 text-black"
+                    placeholder="Enter room name"
+                  />
+                  <button
+                    type="button"
+                    onClick={addRoom}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 ease-in-out w-full sm:w-auto"
+                  >
+                    Add Room
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {rooms.map((room) => (
-                <div key={room} className="relative group bg-white rounded-lg border border-gray-200 p-4 sm:p-6 hover:border-indigo-500 transition-colors duration-150">
+                <div key={room} className="group bg-white rounded-lg border-2 border-gray-200 p-5 hover:border-indigo-500 hover:shadow-md transition-all duration-200">
                   {editingRoom?.oldName === room ? (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       <input
                         type="text"
                         value={editingRoom.newName}
                         onChange={(e) => setEditingRoom({ ...editingRoom, newName: e.target.value })}
-                        className="block w-full rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-black"
+                        className="block w-full rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 text-black"
                       />
-                      <div className="flex space-x-2">
+                      <div className="flex gap-3">
                         <button
                           type="button"
                           onClick={saveEditedRoom}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
                         >
                           Save
                         </button>
                         <button
                           type="button"
                           onClick={() => setEditingRoom(null)}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
                         >
                           Cancel
                         </button>
@@ -641,24 +953,24 @@ const QuotationGenerator = () => {
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg sm:text-xl font-medium text-gray-900">{room}</h3>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-semibold text-gray-900">{room}</h3>
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
                           {items.filter(item => item.room === room).length} items
                         </span>
                       </div>
-                      <div className="flex space-x-2">
+                      <div className="flex gap-3">
                         <button
                           type="button"
                           onClick={() => startEditingRoom(room)}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
                         >
                           Edit
                         </button>
                         <button
                           type="button"
                           onClick={() => deleteRoom(room)}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
                         >
                           Delete
                         </button>
@@ -670,64 +982,56 @@ const QuotationGenerator = () => {
             </div>
           </div>
 
-          {/* Custom Item Management */}
-          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4 sm:gap-0">
-              <div>
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Custom Items</h2>
-                <p className="mt-1 text-sm text-gray-500">Manage your catalog of items and their prices</p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 w-full sm:w-auto">
+          {/* Custom Items Management */}
+          <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
+            <div className="border-b border-gray-200 pb-4 mb-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-semibold text-gray-900">Custom Items</h2>
+                  <p className="mt-1 text-sm text-gray-500">Add and manage custom items for your quotations</p>
+                </div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
                   <input
                     type="text"
                     value={newItemName}
                     onChange={(e) => setNewItemName(e.target.value)}
-                    className="flex-1 rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black w-full"
-                    placeholder="Item name"
+                    className="rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 w-full sm:w-64 text-black"
+                    placeholder="Enter item name"
                   />
-                  <input
-                    type="number"
-                    value={newItemPrice}
-                    onChange={(e) => setNewItemPrice(parseFloat(e.target.value))}
-                    className="flex-1 rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black w-full"
-                    placeholder="Price"
-                  />
+                  <button
+                    type="button"
+                    onClick={addCustomItem}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 ease-in-out w-full sm:w-auto"
+                  >
+                    Add Item
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={addCustomItem}
-                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-full sm:w-auto"
-                >
-                  Add Item
-                </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {Object.entries(customItems).map(([itemName, price]) => (
-                <div key={itemName} className="relative group bg-white rounded-lg border border-gray-200 p-4 sm:p-6 hover:border-indigo-500 transition-colors duration-150">
-                  {editingItem === itemName ? (
-                    <div className="space-y-3">
-                      <div className="font-medium text-gray-900">{itemName}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {customItems.map((itemName) => (
+                <div key={itemName} className="group bg-white rounded-lg border-2 border-gray-200 p-5 hover:border-indigo-500 hover:shadow-md transition-all duration-200">
+                  {editingItem?.oldName === itemName ? (
+                    <div className="space-y-4">
                       <input
-                        type="number"
-                        value={editingPrice}
-                        onChange={(e) => setEditingPrice(parseFloat(e.target.value))}
-                        className="block w-full rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
+                        type="text"
+                        value={editingItem.newName}
+                        onChange={(e) => setEditingItem({ ...editingItem, newName: e.target.value })}
+                        className="block w-full rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 text-black"
                       />
-                      <div className="flex space-x-2">
+                      <div className="flex gap-3">
                         <button
                           type="button"
-                          onClick={saveEditedPrice}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                          onClick={saveEditedItem}
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
                         >
                           Save
                         </button>
                         <button
                           type="button"
                           onClick={() => setEditingItem(null)}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
                         >
                           Cancel
                         </button>
@@ -735,24 +1039,141 @@ const QuotationGenerator = () => {
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-lg sm:text-xl font-medium text-gray-900">{itemName}</h3>
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          ₹{formatPrice(price)}/area
-                        </span>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-medium text-gray-900">{itemName}</h3>
                       </div>
-                      <div className="flex space-x-2">
+                      <div className="flex gap-3">
                         <button
                           type="button"
-                          onClick={() => startEditing(itemName, price)}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          onClick={() => startEditingItem(itemName)}
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
                         >
-                          Edit Price
+                          Edit
                         </button>
                         <button
                           type="button"
                           onClick={() => deleteCustomItem(itemName)}
-                          className="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Item Types Management */}
+          <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
+            <div className="border-b border-gray-200 pb-4 mb-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-semibold text-gray-900">Item Types</h2>
+                  <p className="mt-1 text-sm text-gray-500">Manage item types and their rates</p>
+                </div>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                  <input
+                    type="text"
+                    value={newTypeName}
+                    onChange={(e) => setNewTypeName(e.target.value)}
+                    placeholder="Type Name"
+                    className="rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 w-full sm:w-48 text-black"
+                  />
+                  <input
+                    type="number"
+                    value={newTypeRate || ''}
+                    onChange={(e) => setNewTypeRate(Number(e.target.value))}
+                    placeholder="Rate"
+                    className="rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 w-full sm:w-36 text-black"
+                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={newTypeIsLumpsum}
+                      onChange={(e) => setNewTypeIsLumpsum(e.target.checked)}
+                      className="rounded-lg border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400"
+                    />
+                    <label>Lumpsum</label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addItemType}
+                    className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 ease-in-out w-full sm:w-auto"
+                  >
+                    Add Type
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {itemTypes.map((type) => (
+                <div key={type.name} className="group bg-white rounded-lg border-2 border-gray-200 p-5 hover:border-indigo-500 hover:shadow-md transition-all duration-200">
+                  {editingType?.name === type.name ? (
+                    <div className="space-y-4">
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          value={editingType.name}
+                          onChange={(e) => setEditingType({ ...editingType, name: e.target.value })}
+                          placeholder="Type Name"
+                          className="block w-full rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 text-black"
+                        />
+                        <input
+                          type="number"
+                          value={editingType.rate}
+                          onChange={(e) => setEditingType({ ...editingType, rate: Number(e.target.value) })}
+                          placeholder="Rate"
+                          className="block w-full rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 text-black"
+                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={editingType.isLumpsum}
+                            onChange={(e) => setEditingType({ ...editingType, isLumpsum: e.target.checked })}
+                            className="rounded-lg border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400"
+                          />
+                          <label>Lumpsum</label>
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={saveEditedType}
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingType(null)}
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex flex-col gap-2 mb-4">
+                        <h3 className="text-lg font-medium text-gray-900">{type.name}</h3>
+                        <p className="text-sm text-gray-500">₹{type.rate.toLocaleString('en-IN')}/area</p>
+                        <p className="text-sm text-gray-500">{type.isLumpsum ? 'Lumpsum' : 'Rate per area'}</p>
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => startEditingType(type)}
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteItemType(type.name)}
+                          className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200"
                         >
                           Delete
                         </button>
@@ -765,24 +1186,26 @@ const QuotationGenerator = () => {
           </div>
 
           {/* Terms and Conditions */}
-          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4 sm:gap-0">
+          <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8">
+            <div className="border-b border-gray-200 pb-4 mb-6">
+              <h2 className="text-2xl font-semibold text-gray-900">Terms & Conditions</h2>
+              <p className="mt-1 text-sm text-gray-500">Manage terms and conditions for your quotations</p>
+            </div>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Terms & Conditions</h2>
-                <p className="mt-1 text-sm text-gray-500">Manage terms and conditions for your quotations</p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
                 <input
                   type="text"
                   value={newTerm}
                   onChange={(e) => setNewTerm(e.target.value)}
-                  className="rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
+                  className="rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 w-full text-black"
                   placeholder="Enter new term"
                 />
+              </div>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={addTerm}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-full sm:w-auto"
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 ease-in-out w-full sm:w-auto"
                 >
                   Add Term
                 </button>
@@ -798,19 +1221,19 @@ const QuotationGenerator = () => {
                         type="text"
                         value={editingTerm.text}
                         onChange={(e) => setEditingTerm({ ...editingTerm, text: e.target.value })}
-                        className="flex-1 rounded-md border-2 border-black focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
+                        className="flex-1 rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                       />
                       <button
                         type="button"
                         onClick={updateTerm}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200 ease-in-out"
                       >
                         Save
                       </button>
                       <button
                         type="button"
                         onClick={() => setEditingTerm(null)}
-                        className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-lg shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 ease-in-out"
                       >
                         Cancel
                       </button>
@@ -867,21 +1290,23 @@ const QuotationGenerator = () => {
 
           {/* Room-wise Items */}
           {rooms.map((room) => (
-            <div key={room} className="bg-white rounded-lg shadow-sm p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4 sm:gap-0">
+            <div key={room} className="bg-white rounded-lg shadow-lg p-6 sm:p-8">
+              <div className="border-b border-gray-200 pb-4 mb-6">
+                <h2 className="text-2xl font-semibold text-gray-900">{room}</h2>
+                <p className="mt-1 text-sm text-gray-500">
+                  {items.filter(item => item.room === room).length} items configured
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div>
-                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900">{room}</h2>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {items.filter(item => item.room === room).length} items configured
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => addItem(room)}
+                    className="inline-flex items-center justify-center px-6 py-2.5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 ease-in-out w-full sm:w-auto"
+                  >
+                    Add Item
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => addItem(room)}
-                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-full sm:w-auto"
-                >
-                  Add Item
-                </button>
               </div>
 
               <div className="space-y-4">
@@ -893,96 +1318,85 @@ const QuotationGenerator = () => {
                         <select
                           value={item.item}
                           onChange={(e) => updateItem(item.id, 'item', e.target.value)}
-                          className="mt-1 block w-full rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
+                          className="mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                         >
-                          {Object.keys(customItems).map(itemName => (
+                          {customItems.map(itemName => (
                             <option key={itemName} value={itemName}>{itemName}</option>
                           ))}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">D1</label>
-                        <input
-                          type="number"
-                          value={item.d1}
-                          onChange={(e) => updateItem(item.id, 'd1', parseFloat(e.target.value))}
-                          required
-                          className="mt-1 block w-full rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
-                          placeholder="0"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">D2</label>
-                        <input
-                          type="number"
-                          value={item.d2}
-                          onChange={(e) => updateItem(item.id, 'd2', parseFloat(e.target.value))}
-                          required
-                          className="mt-1 block w-full rounded-md border-2 border-black shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm text-black"
-                          placeholder="0"
-                        />
-                      </div>
-                      <div>
                         <label className="block text-sm font-medium text-gray-700">Type</label>
-                        <input
-                          type="text"
+                        <select
                           value={item.type}
-                          readOnly
-                          className="mt-1 block w-full rounded-md border-2 border-black bg-gray-50 shadow-sm sm:text-sm text-black"
-                        />
+                          onChange={(e) => updateItem(item.id, 'type', e.target.value)}
+                          className="mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
+                        >
+                          {itemTypes.map(type => (
+                            <option key={type.name} value={type.name}>
+                              {type.name} {type.isLumpsum ? '(₹' + type.rate.toLocaleString('en-IN') + ' Lumpsum)' : '(₹' + type.rate.toLocaleString('en-IN') + '/area)'}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700">Area</label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
-                          <input
-                            type="number"
-                            value={item.area}
-                            readOnly
-                            className="block w-full rounded-md border-2 border-black bg-gray-50 pr-12 sm:text-sm text-black"
-                          />
-                          <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                            <span className="text-gray-500 sm:text-sm">m²</span>
+                      {!itemTypes.find(type => type.name === item.type)?.isLumpsum && (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">D1</label>
+                            <input
+                              type="number"
+                              value={item.d1}
+                              onChange={(e) => updateItem(item.id, 'd1', parseFloat(e.target.value))}
+                              required
+                              className="mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
+                              placeholder="0"
+                            />
                           </div>
-                        </div>
-                      </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">D2</label>
+                            <input
+                              type="number"
+                              value={item.d2}
+                              onChange={(e) => updateItem(item.id, 'd2', parseFloat(e.target.value))}
+                              required
+                              className="mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Area</label>
+                            <input
+                              type="number"
+                              value={item.area}
+                              readOnly
+                              className="mt-1 block w-full rounded-lg border-2 border-gray-300 px-4 py-2 bg-gray-50 shadow-sm sm:text-sm text-black"
+                            />
+                          </div>
+                        </>
+                      )}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Price</label>
+                        <label className="block text-sm font-medium text-gray-700">Rate</label>
                         <div className="mt-1 relative rounded-md shadow-sm">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <span className="text-gray-500 sm:text-sm">₹</span>
                           </div>
                           <input
-                            type="number"
-                            value={item.price}
+                            type="text"
+                            value={(item.price * item.area).toLocaleString('en-IN')}
                             readOnly
-                            className="block w-full rounded-md border-2 border-black pl-7 bg-gray-50 sm:text-sm text-black"
+                            className="block w-full pl-7 pr-12 sm:text-sm border-2 border-gray-300 rounded-lg bg-gray-50 shadow-sm text-black"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Total</label>
-                        <div className="mt-1 flex items-center gap-2">
-                          <div className="relative flex-1 rounded-md shadow-sm">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                              <span className="text-gray-500 sm:text-sm">₹</span>
-                            </div>
-                            <input
-                              type="number"
-                              value={item.totalAmount}
-                              readOnly
-                              className="block w-full rounded-md border-2 border-black pl-7 bg-gray-50 sm:text-sm text-black"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removeItem(item.id)}
-                            className="inline-flex items-center p-2 border border-transparent rounded-md text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                          >
-                            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
+                        <label className="block text-sm font-medium text-gray-700">Actions</label>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(item.id)}
+                          className="inline-flex items-center p-2 border border-transparent rounded-lg shadow-sm text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200 ease-in-out"
+                        >
+                          Remove
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -992,18 +1406,18 @@ const QuotationGenerator = () => {
           ))}
 
           {/* Additional Services */}
-          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mt-8">
-            <div className="mb-4 sm:mb-6">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Additional Services</h2>
+          <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
+            <div className="border-b border-gray-200 pb-4 mb-6">
+              <h2 className="text-2xl font-semibold text-gray-900">Additional Services</h2>
               <p className="mt-1 text-sm text-gray-500">Configure extra services and their descriptions</p>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* False Ceiling */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">False Ceiling</label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
+              <div className="bg-white rounded-lg border-2 border-gray-200 p-5 hover:border-indigo-500 hover:shadow-md transition-all duration-200">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-gray-900">False Ceiling</h3>
+                  <div className="relative rounded-md shadow-sm">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span className="text-gray-500 sm:text-sm">₹</span>
                     </div>
@@ -1014,28 +1428,25 @@ const QuotationGenerator = () => {
                         const value = e.target.value.replace(/[^0-9]/g, '');
                         setFalseCeiling(value);
                       }}
-                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-black rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-black"
+                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                       placeholder="Enter amount"
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
                   <textarea
                     value={falseCeilingDesc}
                     onChange={(e) => setFalseCeilingDesc(e.target.value)}
                     rows={3}
-                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-2 border-black rounded-md text-black"
+                    className="block w-full rounded-lg border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                     placeholder="Enter false ceiling details"
                   />
                 </div>
               </div>
 
               {/* Electrical */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Electrical</label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
+              <div className="bg-white rounded-lg border-2 border-gray-200 p-5 hover:border-indigo-500 hover:shadow-md transition-all duration-200">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-gray-900">Electrical</h3>
+                  <div className="relative rounded-md shadow-sm">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span className="text-gray-500 sm:text-sm">₹</span>
                     </div>
@@ -1046,28 +1457,25 @@ const QuotationGenerator = () => {
                         const value = e.target.value.replace(/[^0-9]/g, '');
                         setElectrical(value);
                       }}
-                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-black rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-black"
+                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                       placeholder="Enter amount"
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
                   <textarea
                     value={electricalDesc}
                     onChange={(e) => setElectricalDesc(e.target.value)}
                     rows={3}
-                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-2 border-black rounded-md text-black"
+                    className="block w-full rounded-lg border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                     placeholder="Enter electrical work details"
                   />
                 </div>
               </div>
 
               {/* Painting */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Painting</label>
-                  <div className="mt-1 relative rounded-md shadow-sm">
+              <div className="bg-white rounded-lg border-2 border-gray-200 p-5 hover:border-indigo-500 hover:shadow-md transition-all duration-200">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium text-gray-900">Painting</h3>
+                  <div className="relative rounded-md shadow-sm">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span className="text-gray-500 sm:text-sm">₹</span>
                     </div>
@@ -1078,18 +1486,15 @@ const QuotationGenerator = () => {
                         const value = e.target.value.replace(/[^0-9]/g, '');
                         setPainting(value);
                       }}
-                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-black rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-black"
+                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                       placeholder="Enter amount"
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
                   <textarea
                     value={paintingDesc}
                     onChange={(e) => setPaintingDesc(e.target.value)}
                     rows={3}
-                    className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-2 border-black rounded-md text-black"
+                    className="block w-full rounded-lg border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
                     placeholder="Enter painting work details"
                   />
                 </div>
@@ -1098,31 +1503,44 @@ const QuotationGenerator = () => {
           </div>
 
           {/* Total Summary */}
-          <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mt-8">
-            <div className="flex justify-between items-center">
-              <div className="space-y-1">
-                <h3 className="text-lg sm:text-xl font-medium text-gray-900">Total Amount</h3>
-                <p className="text-sm text-gray-500">Including all services and items</p>
+          <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8 mt-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h3 className="text-2xl font-semibold text-gray-900">Total Amount</h3>
+                <p className="mt-1 text-sm text-gray-500">Including all services and items</p>
               </div>
               <div className="text-right">
-                <div className="text-3xl sm:text-4xl font-bold text-gray-900">
-                  ₹{formatPrice(calculateTotal())}
-                </div>
-                <p className="text-sm text-gray-500">Total Amount</p>
+                <div className="text-3xl font-bold text-gray-900">₹{calculateTotal().toLocaleString('en-IN')}</div>
+                <p className="mt-1 text-sm text-gray-500">Subtotal: ₹{calculateSubtotal().toLocaleString('en-IN')}</p>
               </div>
             </div>
           </div>
 
-          {/* Generate PDF Button */}
-          <div className="flex justify-end mt-4 sm:mt-8">
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base sm:text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 w-full sm:w-auto"
-            >
-              Generate Quotation
-            </button>
+          {/* Submit Button */}
+          <div className="flex justify-end mt-8">
+
           </div>
         </form>
+        <CustomerSearchPopup
+          customers={customers}
+          isOpen={isCustomerPopupOpen}
+          onClose={() => setIsCustomerPopupOpen(false)}
+          onSelect={(customer) => handleCustomerSelect(customer.id)}
+        />
+        <div className="mt-6 flex justify-end space-x-4">
+          <button
+            onClick={generatePDF}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            Generate PDF
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+          >
+            Save Quotation
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -37,6 +37,26 @@ const CustomerDatabase: React.FC = () => {
     try {
       const customerSet = new Map<string, Customer>();
 
+      // Fetch registered customers
+      const customersQuery = query(collection(db, 'customers'));
+      const customersSnapshot = await getDocs(customersQuery);
+      
+      customersSnapshot.forEach((doc) => {
+        const data = doc.data();
+        const email = data.email.toLowerCase();
+        
+        customerSet.set(email, {
+          id: doc.id,
+          name: data.name,
+          email: email,
+          phone: data.phone || '',
+          source: 'Registered Customer',
+          lastContact: data.createdAt || new Date().toLocaleDateString(),
+          address: data.address,
+          selected: false,
+        });
+      });
+
       // Fetch customers from enquiry forms
       const enquiriesQuery = query(collection(db, 'enquiries'));
       const enquiriesSnapshot = await getDocs(enquiriesQuery);
@@ -74,8 +94,9 @@ const CustomerDatabase: React.FC = () => {
           customerSet.set(email, {
             ...existingCustomer,
             projects: [...(existingCustomer.projects || []), data.title],
-            address: data.address,
-            source: existingCustomer.source + ', Project Client',
+            source: existingCustomer.source.includes('Project Client') 
+              ? existingCustomer.source 
+              : existingCustomer.source + ', Project Client',
           });
         } else {
           // Add new customer from project
@@ -149,6 +170,7 @@ const CustomerDatabase: React.FC = () => {
       customer.phone.includes(searchTerm);
     
     if (filter === 'all') return matchesSearch;
+    if (filter === 'registered') return matchesSearch && customer.source.includes('Registered Customer');
     if (filter === 'projects') return matchesSearch && (customer.projects?.length ?? 0) > 0;
     if (filter === 'enquiries') return matchesSearch && customer.source.includes('Enquiry');
     return matchesSearch;
@@ -186,6 +208,7 @@ const CustomerDatabase: React.FC = () => {
               className="w-full sm:w-auto p-3 border border-gray-300 rounded-md text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Customers</option>
+              <option value="registered">Registered Customers</option>
               <option value="projects">Project Clients</option>
               <option value="enquiries">Enquiries</option>
             </select>

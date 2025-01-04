@@ -8,6 +8,19 @@ import 'react-toastify/dist/ReactToastify.css';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
+interface PaymentHistory {
+  amount: number;
+  date: string;
+  type: string;
+  notes?: string;
+}
+
+interface PaymentSchedule {
+  dueDate: string;
+  expectedAmount: number;
+  status: 'pending' | 'paid' | 'overdue';
+}
+
 interface Project {
   id: string;
   title: string;
@@ -30,6 +43,8 @@ interface Project {
     remainingAmount: number;
     paymentStatus: string;
     nextPaymentDate: string;
+    paymentHistory: PaymentHistory[];
+    paymentSchedule: PaymentSchedule[];
   };
 }
 
@@ -47,10 +62,18 @@ const ProjectOverview: React.FC = () => {
     try {
       const projectsQuery = query(collection(db, 'projects'));
       const querySnapshot = await getDocs(projectsQuery);
-      const projectsList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Project[];
+      const projectsList = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          payments: {
+            ...data.payments,
+            paymentHistory: data.payments?.paymentHistory || [],
+            paymentSchedule: data.payments?.paymentSchedule || []
+          }
+        };
+      }) as Project[];
       setProjects(projectsList);
       setLoading(false);
     } catch (error) {
@@ -75,7 +98,11 @@ const ProjectOverview: React.FC = () => {
         location: editingProject.location,
         budget: editingProject.budget,
         address: editingProject.address,
-        payments: editingProject.payments,
+        payments: {
+          ...editingProject.payments,
+          paymentHistory: editingProject.payments.paymentHistory || [],
+          paymentSchedule: editingProject.payments.paymentSchedule || []
+        },
       });
       await fetchProjects();
       setEditingProject(null);
@@ -288,6 +315,49 @@ const ProjectOverview: React.FC = () => {
                           />
                         </div>
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Next Payment Date
+                        </label>
+                        <input
+                          type="date"
+                          value={editingProject.payments.nextPaymentDate}
+                          onChange={(e) => setEditingProject({
+                            ...editingProject,
+                            payments: {
+                              ...editingProject.payments,
+                              nextPaymentDate: e.target.value
+                            }
+                          })}
+                          className="w-full p-2 border rounded-md"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Payment History
+                        </label>
+                        <div className="space-y-2">
+                          {editingProject.payments.paymentHistory.map((payment, index) => (
+                            <div key={index} className="flex justify-between items-center">
+                              <p className="text-sm text-gray-700">{payment.date}</p>
+                              <p className="text-sm text-gray-700">₹{payment.amount}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Payment Schedule
+                        </label>
+                        <div className="space-y-2">
+                          {editingProject.payments.paymentSchedule.map((schedule, index) => (
+                            <div key={index} className="flex justify-between items-center">
+                              <p className="text-sm text-gray-700">{schedule.dueDate}</p>
+                              <p className="text-sm text-gray-700">₹{schedule.expectedAmount}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                     <div className="flex justify-end space-x-4">
                       <button
@@ -350,6 +420,69 @@ const ProjectOverview: React.FC = () => {
                         <p className="text-sm text-gray-700 font-medium">
                           Remaining: <span className="text-red-600">₹{project.payments.remainingAmount.toLocaleString()}</span>
                         </p>
+                        
+                        {/* Payment Progress Bar */}
+                        <div className="mt-3">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm text-gray-700">Payment Progress</span>
+                            <span className="text-sm text-gray-700">{Math.round((project.payments.advanceAmount / project.payments.totalAmount) * 100)}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full" 
+                              style={{ width: `${(project.payments.advanceAmount / project.payments.totalAmount) * 100}%` }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        {/* Payment Status */}
+                        {project.payments.remainingAmount === 0 ? (
+                          <p className="text-sm font-medium mt-2">
+                            Payment Status: <span className="text-green-600 bg-green-100 px-2 py-1 rounded-full">Completed</span>
+                          </p>
+                        ) : project.payments.nextPaymentDate && (
+                          <p className="text-sm text-gray-700 font-medium mt-2">
+                            Next Payment Due: <span className="text-orange-600">
+                              {new Date(project.payments.nextPaymentDate).toLocaleDateString('en-IN', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric'
+                              })}
+                            </span>
+                            {new Date(project.payments.nextPaymentDate) < new Date() && (
+                              <span className="ml-2 text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">Overdue</span>
+                            )}
+                          </p>
+                        )}
+
+                        {/* Payment Schedule */}
+                        {project.payments?.paymentSchedule?.length > 0 && (
+                          <div className="mt-4">
+                            <h4 className="text-sm font-semibold text-gray-700 mb-2">Payment Schedule</h4>
+                            <div className="space-y-2">
+                              {project.payments.paymentSchedule.map((schedule, index) => (
+                                <div key={index} className="flex justify-between items-center text-sm">
+                                  <div>
+                                    <span className="text-gray-600">
+                                      {new Date(schedule.dueDate).toLocaleDateString('en-IN', {
+                                        day: 'numeric',
+                                        month: 'short'
+                                      })}
+                                    </span>
+                                    <span className="ml-2">₹{schedule.expectedAmount.toLocaleString()}</span>
+                                  </div>
+                                  <span className={`px-2 py-1 rounded-full text-xs ${
+                                    schedule.status === 'paid' ? 'bg-green-100 text-green-800' :
+                                    schedule.status === 'overdue' ? 'bg-red-100 text-red-800' :
+                                    'bg-yellow-100 text-yellow-800'
+                                  }`}>
+                                    {schedule.status.charAt(0).toUpperCase() + schedule.status.slice(1)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="text-sm text-gray-600">
@@ -357,6 +490,34 @@ const ProjectOverview: React.FC = () => {
                       <p>{project.address.street}, {project.address.city}</p>
                       <p>{project.address.state} - {project.address.pincode}</p>
                     </div>
+                    {/* Only show payment history section if there is data */}
+                    {project.payments?.paymentHistory?.length > 0 && (
+                      <div className="mt-4 text-sm text-gray-600">
+                        <p className="font-medium">Payment History:</p>
+                        <div className="space-y-2">
+                          {project.payments.paymentHistory.map((payment, index) => (
+                            <div key={index} className="flex justify-between items-center">
+                              <p className="text-sm text-gray-700">{payment.date}</p>
+                              <p className="text-sm text-gray-700">₹{payment.amount}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Only show payment schedule section if there is data */}
+                    {project.payments?.paymentSchedule?.length > 0 && (
+                      <div className="mt-4 text-sm text-gray-600">
+                        <p className="font-medium">Payment Schedule:</p>
+                        <div className="space-y-2">
+                          {project.payments.paymentSchedule.map((schedule, index) => (
+                            <div key={index} className="flex justify-between items-center">
+                              <p className="text-sm text-gray-700">{schedule.dueDate}</p>
+                              <p className="text-sm text-gray-700">₹{schedule.expectedAmount}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

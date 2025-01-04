@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../config/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import CustomerSearchPopup from './CustomerSearchPopup';
 
 interface ProjectWorker {
   name: string;
@@ -34,6 +35,19 @@ interface ProjectData {
     remainingAmount: number;
     paymentStatus: 'Pending' | 'Partially Paid' | 'Fully Paid';
     nextPaymentDate: string;
+  };
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    pincode: string;
   };
 }
 
@@ -71,6 +85,11 @@ const ProjectUpload: React.FC = () => {
     role: '',
     contactNumber: ''
   });
+
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] = useState<string>('');
+  const [manualEntry, setManualEntry] = useState(false);
+  const [isCustomerPopupOpen, setIsCustomerPopupOpen] = useState(false);
 
   const updatePaymentStatus = (total: number, advance: number) => {
     if (advance === 0) return 'Pending';
@@ -168,6 +187,44 @@ const ProjectUpload: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      try {
+        const customersCollection = collection(db, 'customers');
+        const customersSnapshot = await getDocs(customersCollection);
+        const customersList = customersSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Customer));
+        setCustomers(customersList);
+      } catch (error) {
+        console.error('Error fetching customers:', error);
+        toast.error('Failed to load customers');
+      }
+    };
+
+    fetchCustomers();
+  }, []);
+
+  const handleCustomerSelect = (customerId: string) => {
+    const customer = customers.find(c => c.id === customerId);
+    if (customer) {
+      setSelectedCustomer(customerId);
+      setProjectData(prev => ({
+        ...prev,
+        client: customer.name,
+        clientEmail: customer.email,
+        clientPhone: customer.phone,
+        address: {
+          street: customer.address.street,
+          city: customer.address.city,
+          state: customer.address.state,
+          pincode: customer.address.pincode
+        }
+      }));
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-md">
       <h2 className="text-2xl font-bold mb-6 text-blue-600">Add New Project</h2>
@@ -243,52 +300,165 @@ const ProjectUpload: React.FC = () => {
           </div>
         </div>
 
-        {/* Client Details Section */}
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Client Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Client Name *
-              </label>
-              <input
-                type="text"
-                value={projectData.client}
-                onChange={(e) => setProjectData(prev => ({ ...prev, client: e.target.value }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-                required
-              />
+        {/* Customer Selection */}
+        <div className="space-y-6 bg-white rounded-lg shadow p-6">
+          <div className="grid grid-cols-1 gap-6">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <label className="block text-sm font-semibold text-gray-700">
+                  Customer Details
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualEntry(!manualEntry);
+                    if (!manualEntry) {
+                      setSelectedCustomer('');
+                      setProjectData(prev => ({
+                        ...prev,
+                        client: '',
+                        clientEmail: '',
+                        clientPhone: '',
+                        address: {
+                          ...prev.address,
+                          street: '',
+                          city: '',
+                          state: '',
+                          pincode: ''
+                        }
+                      }));
+                    }
+                  }}
+                  className="text-sm text-indigo-600 hover:text-indigo-500 font-medium"
+                >
+                  {manualEntry ? 'Select Existing Customer' : 'Enter Manually'}
+                </button>
+              </div>
+
+              {!manualEntry ? (
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={customers.find(c => c.id === selectedCustomer)?.name || ''}
+                    readOnly
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-black"
+                    placeholder="Click to select customer"
+                    onClick={() => setIsCustomerPopupOpen(true)}
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                    <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      Customer Name
+                    </label>
+                    <input
+                      type="text"
+                      name="client"
+                      value={projectData.client}
+                      onChange={(e) => setProjectData({ ...projectData, client: e.target.value })}
+                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      Customer Email
+                    </label>
+                    <input
+                      type="email"
+                      name="clientEmail"
+                      value={projectData.clientEmail}
+                      onChange={(e) => setProjectData({ ...projectData, clientEmail: e.target.value })}
+                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      Customer Phone
+                    </label>
+                    <input
+                      type="tel"
+                      name="clientPhone"
+                      value={projectData.clientPhone}
+                      onChange={(e) => setProjectData({ ...projectData, clientPhone: e.target.value })}
+                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      Street Address
+                    </label>
+                    <input
+                      type="text"
+                      name="street"
+                      value={projectData.address.street}
+                      onChange={(e) => setProjectData(prev => ({
+                        ...prev,
+                        address: { ...prev.address, street: e.target.value }
+                      }))}
+                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
+                      placeholder="Enter street address"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      City
+                    </label>
+                    <input
+                      type="text"
+                      name="city"
+                      value={projectData.address.city}
+                      onChange={(e) => setProjectData(prev => ({
+                        ...prev,
+                        address: { ...prev.address, city: e.target.value }
+                      }))}
+                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
+                      placeholder="Enter city"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      State
+                    </label>
+                    <input
+                      type="text"
+                      name="state"
+                      value={projectData.address.state}
+                      onChange={(e) => setProjectData(prev => ({
+                        ...prev,
+                        address: { ...prev.address, state: e.target.value }
+                      }))}
+                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
+                      placeholder="Enter state"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      PIN Code
+                    </label>
+                    <input
+                      type="text"
+                      name="pincode"
+                      value={projectData.address.pincode}
+                      onChange={(e) => setProjectData(prev => ({
+                        ...prev,
+                        address: { ...prev.address, pincode: e.target.value }
+                      }))}
+                      pattern="[0-9]{6}"
+                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
+                      placeholder="Enter 6-digit PIN code"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Client Phone *
-              </label>
-              <input
-                type="tel"
-                value={projectData.clientPhone}
-                onChange={(e) => setProjectData(prev => ({ ...prev, clientPhone: e.target.value }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-                required
-                pattern="[0-9]{10}"
-                placeholder="10-digit phone number"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Client Email *
-              </label>
-              <input
-                type="email"
-                value={projectData.clientEmail}
-                onChange={(e) => setProjectData(prev => ({ ...prev, clientEmail: e.target.value }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-                required
-                placeholder="client@example.com"
-              />
-            </div>
-
+            {/* Project Title */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Location
@@ -302,6 +472,13 @@ const ProjectUpload: React.FC = () => {
             </div>
           </div>
         </div>
+
+        <CustomerSearchPopup
+          customers={customers}
+          isOpen={isCustomerPopupOpen}
+          onClose={() => setIsCustomerPopupOpen(false)}
+          onSelect={(customer) => handleCustomerSelect(customer.id)}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>

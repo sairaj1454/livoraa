@@ -9,6 +9,7 @@ import BlogUpload from '../../components/BlogUpload';
 import BlogManager from '../../components/BlogManager';
 import TestimonialManager from '../../components/TestimonialManager';
 import ProjectUpload from '../../components/ProjectUpload';
+import CustomerCreation from '../../components/CustomerCreation';
 import CustomerDatabase from '../../components/CustomerDatabase';
 import EmailCampaign from '../../components/EmailCampaign';
 import ProjectOverview from '../../components/ProjectOverview';
@@ -16,6 +17,7 @@ import EmployeeManager from '../../components/EmployeeManager';
 import Settings from '../../components/Settings';
 import QuotationGenerator from '../../components/QuotationGenerator';
 import ReceiptGenerator from '../../components/ReceiptGenerator';
+
 import { useDashboardData } from '../../hooks/useDashboardData';
 import {
   HomeIcon,
@@ -32,6 +34,8 @@ import {
   BriefcaseIcon,
   DocumentTextIcon,
   ReceiptRefundIcon,
+  UserPlusIcon,
+  ChatBubbleLeftIcon
 } from '@heroicons/react/24/outline';
 
 const Dashboard = () => {
@@ -50,18 +54,20 @@ const Dashboard = () => {
   };
 
   const navigationItems = [
-    { name: 'Dashboard', icon: HomeIcon, id: 'dashboard' },
-    { name: 'Projects', icon: BriefcaseIcon, id: 'projects' },
-    { name: 'Project Overview', icon: ChartBarIcon, id: 'project-overview' },
-    { name: 'Gallery', icon: PhotoIcon, id: 'gallery' },
-    { name: 'Enquiries', icon: UserGroupIcon, id: 'enquiries' },
-    { name: 'Customers', icon: UsersIcon, id: 'customers' },
-    { name: 'Employees', icon: UserGroupIcon, id: 'employees' },
-    { name: 'Blog', icon: NewspaperIcon, id: 'blog' },
-    { name: 'Testimonials', icon: NewspaperIcon, id: 'testimonials' },
-    { name: 'Generate Quotation', icon: DocumentTextIcon, id: 'quotation' },
-    { name: 'Generate Receipt', icon: ReceiptRefundIcon, id: 'receipt' },
-    { name: 'Settings', icon: Cog6ToothIcon, id: 'settings' },
+    { id: 'dashboard', name: 'Dashboard', icon: HomeIcon },
+    { id: 'projects', name: 'Upload Project', icon: BriefcaseIcon },
+    { id: 'project-overview', name: 'Project Overview', icon: ChartBarIcon },
+    { id: 'gallery', name: 'Gallery', icon: PhotoIcon },
+    { id: 'enquiries', name: 'Enquiries', icon: EnvelopeIcon },
+    { id: 'create-customer', name: 'Create Customer', icon: UserPlusIcon },
+    { id: 'customers', name: 'Customer Database', icon: UserGroupIcon },
+    { id: 'employees', name: 'Employees', icon: UsersIcon },
+    { id: 'blog', name: 'Blog', icon: NewspaperIcon },
+    { id: 'testimonials', name: 'Testimonials', icon: ChatBubbleLeftIcon },
+    { id: 'quotation', name: 'Generate Quotation', icon: DocumentTextIcon },
+  
+    { id: 'receipt', name: 'Generate Receipt', icon: ReceiptRefundIcon },
+    { id: 'settings', name: 'Settings', icon: Cog6ToothIcon },
   ];
 
   const stats = [
@@ -132,6 +138,106 @@ const Dashboard = () => {
     date: formatDate(project.dueDate)
   }));
 
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <div className="p-6">
+            <div className="mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900">Welcome back, Admin</h2>
+              <p className="mt-1 text-sm text-gray-600">Here's what's happening today.</p>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+              {stats.map((stat) => (
+                <div
+                  key={stat.name}
+                  className="bg-white overflow-hidden shadow rounded-lg transition-all hover:shadow-lg"
+                >
+                  <div className="p-5">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
+                          <span className="text-indigo-600 text-xl font-semibold">{stat.value}</span>
+                        </div>
+                      </div>
+                      <div className="ml-5">
+                        <p className="text-sm font-medium text-gray-500 truncate">{stat.name}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Recent Projects */}
+            <div className="bg-white shadow rounded-lg overflow-hidden">
+              <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
+                <h3 className="text-lg leading-6 font-medium text-gray-900">Recent Projects</h3>
+              </div>
+              <div className="divide-y divide-gray-200">
+                {recentProjects.map((project, index) => (
+                  <div key={index} className="px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col sm:flex-row sm:items-center">
+                        <p className="text-sm font-medium text-indigo-600 truncate">{project.name}</p>
+                        <p className="mt-1 sm:mt-0 sm:ml-6 text-sm text-gray-500">Due {project.date}</p>
+                      </div>
+                      <div className="ml-2 flex-shrink-0">
+                        <span
+                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(project.status)}`}
+                        >
+                          {project.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      case 'projects':
+        return <ProjectUpload />;
+      case 'project-overview':
+        return <ProjectOverview />;
+      case 'gallery':
+        return (
+          <>
+            <GalleryUpload />
+            <GalleryManager />
+          </>
+        );
+      case 'enquiries':
+        return <EnquiriesManager />;
+      case 'create-customer':
+        return <CustomerCreation />;
+      case 'customers':
+        return <CustomerDatabase />;
+      case 'employees':
+        return <EmployeeManager />;
+      case 'blog':
+        return (
+          <>
+            <BlogUpload />
+            <BlogManager />
+          </>
+        );
+      case 'testimonials':
+        return <TestimonialManager />;
+      case 'quotation':
+        return <QuotationGenerator />;
+      
+      case 'receipt':
+        return <ReceiptGenerator />;
+      case 'settings':
+        return <Settings />;
+      default:
+        return <div>Invalid tab</div>;
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Mobile menu button and header */}
@@ -166,13 +272,13 @@ const Dashboard = () => {
         }`}
       >
         {/* Backdrop */}
-        <div 
+        <div
           className={`absolute inset-0 bg-gray-600 bg-opacity-75 transition-opacity ${
             isMobileMenuOpen ? 'opacity-100' : 'opacity-0'
           }`}
           onClick={() => setIsMobileMenuOpen(false)}
         />
-        
+
         {/* Sidebar */}
         <div
           className={`absolute inset-y-0 left-0 max-w-xs w-full bg-white shadow-xl transform transition-transform ease-in-out duration-300 ${
@@ -274,86 +380,7 @@ const Dashboard = () => {
       {/* Main content */}
       <div className="flex-1 overflow-auto">
         <div className="py-6 px-4 sm:px-6 lg:px-8 mt-16 lg:mt-0">
-          <main className="flex-1 overflow-y-auto">
-            {activeTab === 'dashboard' && (
-              <div className="p-6">
-                <div className="mb-8">
-                  <h2 className="text-2xl font-semibold text-gray-900">Welcome back, Admin</h2>
-                  <p className="mt-1 text-sm text-gray-600">Here's what's happening today.</p>
-                </div>
-
-                {/* Stats Grid */}
-                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-                  {stats.map((stat) => (
-                    <div
-                      key={stat.name}
-                      className="bg-white overflow-hidden shadow rounded-lg transition-all hover:shadow-lg"
-                    >
-                      <div className="p-5">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0">
-                            <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                              <span className="text-indigo-600 text-xl font-semibold">{stat.value}</span>
-                            </div>
-                          </div>
-                          <div className="ml-5">
-                            <p className="text-sm font-medium text-gray-500 truncate">{stat.name}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Recent Projects */}
-                <div className="bg-white shadow rounded-lg overflow-hidden">
-                  <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">Recent Projects</h3>
-                  </div>
-                  <div className="divide-y divide-gray-200">
-                    {recentProjects.map((project, index) => (
-                      <div key={index} className="px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <div className="flex flex-col sm:flex-row sm:items-center">
-                            <p className="text-sm font-medium text-indigo-600 truncate">{project.name}</p>
-                            <p className="mt-1 sm:mt-0 sm:ml-6 text-sm text-gray-500">Due {project.date}</p>
-                          </div>
-                          <div className="ml-2 flex-shrink-0">
-                            <span
-                              className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(project.status)}`}
-                            >
-                              {project.status}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            {activeTab === 'projects' && <ProjectUpload />}
-            {activeTab === 'project-overview' && <ProjectOverview />}
-            {activeTab === 'gallery' && (
-              <>
-                <GalleryUpload />
-                <GalleryManager />
-              </>
-            )}
-            {activeTab === 'enquiries' && <EnquiriesManager />}
-            {activeTab === 'customers' && <CustomerDatabase />}
-            {activeTab === 'employees' && <EmployeeManager />}
-            {activeTab === 'blog' && (
-              <>
-                <BlogUpload />
-                <BlogManager />
-              </>
-            )}
-            {activeTab === 'testimonials' && <TestimonialManager />}
-            {activeTab === 'quotation' && <QuotationGenerator />}
-            {activeTab === 'receipt' && <ReceiptGenerator />}
-            {activeTab === 'settings' && <Settings />}
-          </main>
+          <main className="flex-1 overflow-y-auto">{renderContent()}</main>
         </div>
       </div>
     </div>
