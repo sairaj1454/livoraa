@@ -5,15 +5,24 @@ const path = require('path');
 require('dotenv').config();
 
 const app = express();
-app.use(cors());
+
+// Configure CORS
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? 'https://virtuous-interiors.onrender.com' 
+    : 'http://localhost:3001',
+  credentials: true
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Create Nodemailer transporter
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'ecnodev@gmail.com',
-    pass: 'dzdw tzrn rumu wjim'
+    user: process.env.EMAIL_USER || 'ecnodev@gmail.com',
+    pass: process.env.EMAIL_PASS || 'dzdw tzrn rumu wjim'
   }
 });
 

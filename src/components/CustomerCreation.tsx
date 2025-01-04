@@ -83,15 +83,14 @@ const CustomerCreation: React.FC = () => {
 
       // Send credentials via email
       try {
-        const apiUrl = import.meta.env.PROD 
-          ? '/api/send-credentials'  // Production URL (same domain)
-          : 'http://localhost:3001/api/send-credentials'; // Development URL
+        const apiUrl = window.location.origin + '/api/send-credentials';
         
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
           body: JSON.stringify({
             email: formData.email,
             password: formData.password,
