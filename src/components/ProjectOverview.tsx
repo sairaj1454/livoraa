@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../config/firebase';
-import { collection, query, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { toast, ToastContainer } from 'react-toastify';
@@ -110,6 +110,28 @@ const ProjectOverview: React.FC = () => {
     } catch (error) {
       console.error('Error updating project:', error);
       toast.error('Error updating project');
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    if (!projectId) return;
+
+    // Show confirmation dialog
+    const isConfirmed = window.confirm('Are you sure you want to delete this project? This action cannot be undone.');
+    
+    if (!isConfirmed) {
+      return; // User cancelled the deletion
+    }
+
+    try {
+      const projectRef = doc(db, 'projects', projectId);
+      await deleteDoc(projectRef);
+      await fetchProjects();
+      setEditingProject(null);
+      toast.success('Project deleted successfully');
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast.error('Error deleting project');
     }
   };
 
@@ -392,15 +414,15 @@ const ProjectOverview: React.FC = () => {
                       <div className="mt-4 md:mt-0 space-x-2">
                         <button
                           onClick={() => setEditingProject(project)}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         >
                           Edit
                         </button>
                         <button
-                          onClick={() => handleEditProject()}
-                          className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                          onClick={() => handleDeleteProject(project.id)}
+                          className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                         >
-                          Save
+                          Delete
                         </button>
                       </div>
                     </div>
