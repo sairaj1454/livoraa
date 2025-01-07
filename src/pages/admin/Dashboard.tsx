@@ -72,7 +72,7 @@ const Dashboard = () => {
 
   const stats = [
     { name: 'Total Projects', value: data.totalProjects.toString(), icon: BriefcaseIcon },
-    { name: 'Active Projects', value: data.inProgressProjects.length.toString(), icon: ChartBarIcon },
+    { name: 'Active Projects', value: data.totalInProgressProjects.toString(), icon: ChartBarIcon },
     { name: 'Team Members', value: data.teamMembers.toString(), icon: UserGroupIcon },
     { name: 'Blog Posts', value: data.totalBlogs.toString(), icon: NewspaperIcon },
   ];

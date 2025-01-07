@@ -21,12 +21,16 @@ service cloud.firestore {
     function isValidProject() {
       let project = request.resource.data;
       return project.title is string && project.title.size() > 0 &&
+             project.description is string &&
              project.client is string && project.client.size() > 0 &&
-             project.clientEmail.matches('^[^@]+@[^@]+\\.[^@]+$') &&
-             project.clientPhone.matches('^[0-9]{10}$') &&
-             project.payments.totalAmount >= 0 &&
-             project.payments.advanceAmount >= 0 &&
-             project.payments.advanceAmount <= project.payments.totalAmount;
+             project.clientEmail is string &&
+             project.clientPhone is string &&
+             project.location is string &&
+             project.address.street is string &&
+             project.address.city is string &&
+             project.address.state is string &&
+             project.address.pincode is string &&
+             project.startDate is string;
     }
 
     // Helper function to validate quotation data

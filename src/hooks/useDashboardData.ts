@@ -23,6 +23,7 @@ interface DashboardData {
   totalQueries: number;
   recentProjects: Project[];
   inProgressProjects: Project[];
+  totalInProgressProjects: number;
 }
 
 const processProjectData = (doc: DocumentData): Project => {
@@ -49,7 +50,8 @@ export const useDashboardData = () => {
     totalBlogs: 0,
     totalQueries: 0,
     recentProjects: [],
-    inProgressProjects: []
+    inProgressProjects: [],
+    totalInProgressProjects: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -92,8 +94,8 @@ export const useDashboardData = () => {
           .slice(0, 5);
 
         // Get in-progress projects
-        const inProgressProjects = allProjects
-          .filter(project => project.status === 'In Progress')
+        const allInProgressProjects = allProjects.filter(project => project.status === 'In Progress');
+        const inProgressProjects = allInProgressProjects
           .sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime())
           .slice(0, 5);
 
@@ -104,7 +106,8 @@ export const useDashboardData = () => {
             totalBlogs,
             totalQueries,
             recentProjects,
-            inProgressProjects
+            inProgressProjects,
+            totalInProgressProjects: allInProgressProjects.length
           });
         }
       } catch (err) {

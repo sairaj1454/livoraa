@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../config/firebase';
-import { collection, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import CustomerSearchPopup from './CustomerSearchPopup';
+import EmployeeSearchPopup from './EmployeeSearchPopup';
 
 interface ProjectWorker {
+  id: string;
   name: string;
   role: string;
   contactNumber: string;
+  position: string;
+  department?: string;
 }
 
 interface ProjectData {
@@ -81,15 +85,21 @@ const ProjectUpload: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [worker, setWorker] = useState<ProjectWorker>({
+    id: '',
     name: '',
     role: '',
-    contactNumber: ''
+    contactNumber: '',
+    position: '',
+    department: ''
   });
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [manualEntry, setManualEntry] = useState(false);
   const [isCustomerPopupOpen, setIsCustomerPopupOpen] = useState(false);
+
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [isEmployeePopupOpen, setIsEmployeePopupOpen] = useState(false);
 
   const updatePaymentStatus = (total: number, advance: number) => {
     if (advance === 0) return 'Pending';
@@ -114,16 +124,52 @@ const ProjectUpload: React.FC = () => {
     });
   };
 
+  const handleEmployeeSelect = (selectedEmployee: any) => {
+    setWorker({
+      id: selectedEmployee.id,
+      name: selectedEmployee.name,
+      role: selectedEmployee.position, // Set initial role as their position
+      contactNumber: selectedEmployee.phone,
+      position: selectedEmployee.position,
+      department: selectedEmployee.department || ''
+    });
+    setIsEmployeePopupOpen(false);
+  };
+
   const handleAddWorker = () => {
-    if (!worker.name || !worker.role || !worker.contactNumber) {
-      toast.error('Please fill in all worker details');
+    if (!worker.id || !worker.name || !worker.role || !worker.contactNumber) {
+      toast.error('Please select an employee and fill in all worker details');
       return;
     }
+
+    // Check if worker already exists in the project
+    const workerExists = projectData.workers.some(w => w.id === worker.id);
+    if (workerExists) {
+      toast.error('This employee is already added to the project');
+      return;
+    }
+
     setProjectData(prev => ({
       ...prev,
-      workers: [...prev.workers, worker]
+      workers: [...prev.workers, {
+        id: worker.id,
+        name: worker.name,
+        role: worker.role,
+        contactNumber: worker.contactNumber,
+        position: worker.position,
+        department: worker.department
+      }]
     }));
-    setWorker({ name: '', role: '', contactNumber: '' });
+
+    // Reset worker form
+    setWorker({
+      id: '',
+      name: '',
+      role: '',
+      contactNumber: '',
+      position: '',
+      department: ''
+    });
   };
 
   const handleRemoveWorker = (index: number) => {
@@ -143,12 +189,61 @@ const ProjectUpload: React.FC = () => {
     setLoading(true);
     try {
       const projectToSubmit = {
-        ...projectData,
+        title: projectData.title,
+        description: projectData.description,
+        client: projectData.client,
+        clientEmail: projectData.clientEmail,
+        clientPhone: projectData.clientPhone,
+        location: projectData.location,
+        address: {
+          street: projectData.address.street,
+          city: projectData.address.city,
+          state: projectData.address.state,
+          pincode: projectData.address.pincode
+        },
+        startDate: projectData.startDate,
+        endDate: projectData.endDate,
+        status: projectData.status,
+        workers: projectData.workers.map(worker => ({
+          id: worker.id,
+          name: worker.name,
+          role: worker.role,
+          contactNumber: worker.contactNumber,
+          position: worker.position,
+          department: worker.department || ''
+        })),
+        payments: {
+          totalAmount: Number(projectData.payments.totalAmount),
+          advanceAmount: Number(projectData.payments.advanceAmount),
+          remainingAmount: Number(projectData.payments.remainingAmount),
+          paymentStatus: projectData.payments.paymentStatus,
+          nextPaymentDate: projectData.payments.nextPaymentDate
+        },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
 
-      await addDoc(collection(db, 'projects'), projectToSubmit);
+      // Add the project to the projects collection
+      const projectRef = await addDoc(collection(db, 'projects'), projectToSubmit);
+      
+      // Update each employee's document with the project reference
+      const updatePromises = projectData.workers.map(async (worker) => {
+        if (worker.id) {
+          const employeeRef = doc(db, 'employees', worker.id);
+          await updateDoc(employeeRef, {
+            projects: arrayUnion({
+              projectId: projectRef.id,
+              projectTitle: projectData.title,
+              role: worker.role,
+              startDate: projectData.startDate,
+              status: projectData.status
+            })
+          });
+        }
+      });
+
+      // Wait for all employee updates to complete
+      await Promise.all(updatePromises);
       
       // Reset form
       setProjectData({
@@ -205,6 +300,25 @@ const ProjectUpload: React.FC = () => {
 
     fetchCustomers();
   }, []);
+
+  useEffect(() => {
+    fetchEmployees();
+  }, []);
+
+  const fetchEmployees = async () => {
+    try {
+      const employeesRef = collection(db, 'employees');
+      const employeesSnapshot = await getDocs(query(employeesRef));
+      const employeesList = employeesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setEmployees(employeesList);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      toast.error('Error loading employees');
+    }
+  };
 
   const handleCustomerSelect = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
@@ -605,28 +719,49 @@ const ProjectUpload: React.FC = () => {
         <div className="border-t pt-6">
           <h3 className="text-lg font-semibold mb-4">Project Workers</h3>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <input
-              type="text"
-              placeholder="Worker Name"
-              value={worker.name}
-              onChange={(e) => setWorker(prev => ({ ...prev, name: e.target.value }))}
-              className="p-2 border rounded text-black"
-            />
-            <input
-              type="text"
-              placeholder="Role"
-              value={worker.role}
-              onChange={(e) => setWorker(prev => ({ ...prev, role: e.target.value }))}
-              className="p-2 border rounded text-black"
-            />
-            <input
-              type="tel"
-              placeholder="Contact Number"
-              value={worker.contactNumber}
-              onChange={(e) => setWorker(prev => ({ ...prev, contactNumber: e.target.value }))}
-              className="p-2 border rounded text-black"
-            />
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold mb-2">Project Workers</h3>
+            <div className="space-y-4">
+              <div className="flex space-x-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700">Worker Name</label>
+                  <div className="mt-1 flex">
+                    <input
+                      type="text"
+                      value={worker.name}
+                      onChange={(e) => setWorker({ ...worker, name: e.target.value })}
+                      className="flex-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                      readOnly
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsEmployeePopupOpen(true)}
+                      className="ml-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      Select Employee
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Role</label>
+                  <input
+                    type="text"
+                    value={worker.role}
+                    onChange={(e) => setWorker(prev => ({ ...prev, role: e.target.value }))}
+                    className="block w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Contact Number</label>
+                  <input
+                    type="tel"
+                    value={worker.contactNumber}
+                    onChange={(e) => setWorker(prev => ({ ...prev, contactNumber: e.target.value }))}
+                    className="block w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
           
           <button
@@ -741,6 +876,13 @@ const ProjectUpload: React.FC = () => {
             </div>
           </div>
         </div>
+
+        <EmployeeSearchPopup
+          employees={employees}
+          isOpen={isEmployeePopupOpen}
+          onClose={() => setIsEmployeePopupOpen(false)}
+          onSelect={handleEmployeeSelect}
+        />
 
         <div className="flex justify-end">
           <button
