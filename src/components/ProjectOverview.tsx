@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../config/firebase';
-import { collection, query, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, getDocs, doc, updateDoc, deleteDoc, arrayUnion, getDoc } from 'firebase/firestore';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Project, PaymentHistory, PaymentSchedule, ProjectWorker } from '../types';
+import NextPaymentEditor from './NextPaymentEditor';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
+
+type PaymentType = 'advance' | 'installment' | 'final';
+type PaymentMethod = 'cash' | 'bank' | 'upi';
 
 const ProjectOverview: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -33,11 +37,12 @@ const ProjectOverview: React.FC = () => {
   const [newPayment, setNewPayment] = useState<PaymentHistory>({
     amount: 0,
     date: new Date().toISOString().split('T')[0],
-    type: 'installment',
+    type: 'installment' as PaymentType,
     notes: '',
-    paymentMethod: 'cash',
-    status: 'pending'
+    paymentMethod: 'cash' as PaymentMethod,
+    status: 'success'
   });
+  const [nextPaymentDate, setNextPaymentDate] = useState<string>('');
 
   useEffect(() => {
     fetchProjects();
@@ -48,10 +53,13 @@ const ProjectOverview: React.FC = () => {
       setLoading(true);
       const projectsQuery = query(collection(db, 'projects'));
       const querySnapshot = await getDocs(projectsQuery);
-      const projectsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Project[];
+      const projectsData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data
+        };
+      }) as Project[];
       setProjects(projectsData);
     } catch (error) {
       console.error('Error fetching projects:', error);
@@ -62,66 +70,53 @@ const ProjectOverview: React.FC = () => {
   };
 
   const handleAddPayment = async (projectId: string) => {
-    if (!editingProject) return;
-    
     try {
-      // Ensure paymentHistory exists and is an array
-      const currentPaymentHistory = Array.isArray(editingProject.payments.paymentHistory) 
-        ? editingProject.payments.paymentHistory 
-        : [];
+      if (!newPayment.amount || newPayment.amount <= 0) {
+        toast.error('Please enter a valid payment amount');
+        return;
+      }
 
-      const updatedPaymentHistory: PaymentHistory[] = [
-        ...currentPaymentHistory,
-        { ...newPayment, status: 'success' as const }
-      ];
-      
-      const newAdvanceAmount = editingProject.payments.advanceAmount + newPayment.amount;
-      const newRemainingAmount = editingProject.payments.totalAmount - newAdvanceAmount;
-      
       const projectRef = doc(db, 'projects', projectId);
+      const projectDoc = await getDoc(projectRef);
+      
+      if (!projectDoc.exists()) {
+        toast.error('Project not found');
+        return;
+      }
+
+      const projectData = projectDoc.data() as Project;
+      const currentPayments = projectData.payments || {};
+      const paymentHistory = currentPayments.paymentHistory || [];
+      const totalPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0) + (currentPayments.advanceAmount || 0);
+      const remainingAfterPayment = (currentPayments.totalAmount || 0) - (totalPaid + newPayment.amount);
+      const isFinalPayment = remainingAfterPayment <= 0;
+
+      if (!isFinalPayment && !nextPaymentDate) {
+        toast.error('Please set the next payment date');
+        return;
+      }
+
       await updateDoc(projectRef, {
-        'payments.paymentHistory': updatedPaymentHistory,
-        'payments.advanceAmount': newAdvanceAmount,
-        'payments.remainingAmount': newRemainingAmount
+        'payments.paymentHistory': arrayUnion({
+          ...newPayment,
+          date: new Date().toISOString().split('T')[0],
+          status: 'success'
+        }),
+        'payments.nextPaymentDate': isFinalPayment ? null : nextPaymentDate
       });
-      
-      setEditingProject({
-        ...editingProject,
-        payments: {
-          ...editingProject.payments,
-          paymentHistory: updatedPaymentHistory,
-          advanceAmount: newAdvanceAmount,
-          remainingAmount: newRemainingAmount
-        }
-      });
-      
-      // Update projects list
-      setProjects(projects.map(p => 
-        p.id === projectId 
-          ? {
-              ...p,
-              payments: {
-                ...p.payments,
-                paymentHistory: updatedPaymentHistory,
-                advanceAmount: newAdvanceAmount,
-                remainingAmount: newRemainingAmount
-              }
-            }
-          : p
-      ));
-      
-      toast.success('Payment added successfully');
-      setShowPaymentForm(false);
-      
-      // Reset payment form
+
       setNewPayment({
         amount: 0,
         date: new Date().toISOString().split('T')[0],
-        type: 'installment',
+        type: 'installment' as PaymentType,
         notes: '',
-        paymentMethod: 'cash',
-        status: 'pending'
+        paymentMethod: 'cash' as PaymentMethod,
+        status: 'success'
       });
+      setNextPaymentDate('');
+      setShowPaymentForm(false);
+      fetchProjects();
+      toast.success('Payment added successfully');
     } catch (error) {
       console.error('Error adding payment:', error);
       toast.error('Failed to add payment');
@@ -154,34 +149,55 @@ const ProjectOverview: React.FC = () => {
   };
 
   const handleEditDetails = (project: Project) => {
-    setEditingProjectData(project);
+    setEditingProject(project);  
+    setEditingProjectData({
+      ...project,
+      id: project.id,  
+      workers: project.workers || [],
+      address: project.address || {
+        street: '',
+        city: '',
+        state: '',
+        pincode: ''
+      }
+    });
     setShowEditModal(true);
   };
 
   const handleUpdateProject = async () => {
-    if (!editingProjectData) return;
-
     try {
+      if (!editingProjectData?.id) {
+        toast.error('Project ID is missing');
+        return;
+      }
+
       const projectRef = doc(db, 'projects', editingProjectData.id);
-      await updateDoc(projectRef, {
+      
+      const updateData = {
         title: editingProjectData.title,
-        description: editingProjectData.description,
         client: editingProjectData.client,
         clientEmail: editingProjectData.clientEmail,
         clientPhone: editingProjectData.clientPhone,
         status: editingProjectData.status,
         location: editingProjectData.location,
-        budget: editingProjectData.budget,
-        address: editingProjectData.address,
-        workers: editingProjectData.workers || []
-      });
+        description: editingProjectData.description,
+        address: {
+          street: editingProjectData.address?.street || '',
+          city: editingProjectData.address?.city || '',
+          state: editingProjectData.address?.state || '',
+          pincode: editingProjectData.address?.pincode || ''
+        }
+      };
 
-      setProjects(projects.map(p => 
-        p.id === editingProjectData.id ? editingProjectData : p
-      ));
+      await updateDoc(projectRef, updateData);
 
-      toast.success('Project updated successfully');
+      await fetchProjects();
+      
       setShowEditModal(false);
+      setEditingProject(null);
+      setEditingProjectData(null);
+      
+      toast.success('Project updated successfully');
     } catch (error) {
       console.error('Error updating project:', error);
       toast.error('Failed to update project');
@@ -199,9 +215,9 @@ const ProjectOverview: React.FC = () => {
       phone: editingProjectData.clientPhone,
       status: 'active',
       assignedTasks: [],
-      position: editingProjectData.client,  // Using role as position
-      department: '',         // Default empty department
-      contactNumber: editingProjectData.clientPhone  // Using phone as contactNumber
+      position: editingProjectData.client,  
+      department: '',         
+      contactNumber: editingProjectData.clientPhone  
     };
 
     setEditingProjectData({
@@ -232,34 +248,28 @@ const ProjectOverview: React.FC = () => {
     });
   };
 
-  // Get unique values for filters
   const uniqueStatuses = [...new Set(projects.map(p => p.status))];
   const uniquePaymentStatuses = [...new Set(projects.map(p => p.payments.paymentStatus))];
 
-  // Get search suggestions
   const getSearchSuggestions = (query: string) => {
     if (!query) return [];
     const suggestions = [];
     
-    // Project titles
     suggestions.push(...projects
       .filter(p => p.title.toLowerCase().includes(query.toLowerCase()))
       .map(p => ({ type: 'Project', value: p.title })));
     
-    // Client names
     suggestions.push(...projects
       .filter(p => p.client.toLowerCase().includes(query.toLowerCase()))
       .map(p => ({ type: 'Client', value: p.client })));
     
-    // Locations
     suggestions.push(...projects
       .filter(p => p.location.toLowerCase().includes(query.toLowerCase()))
       .map(p => ({ type: 'Location', value: p.location })));
 
-    return suggestions.slice(0, 5); // Limit to 5 suggestions
+    return suggestions.slice(0, 5); 
   };
 
-  // Filter projects based on all criteria
   const filteredProjects = projects.filter(project => {
     const searchLower = searchQuery.toLowerCase();
     const matchesSearch = 
@@ -309,15 +319,378 @@ const ProjectOverview: React.FC = () => {
     setCurrentPage(1);
   };
 
-  // Get current project
   const indexOfLastProject = currentPage * projectsPerPage;
   const indexOfFirstProject = indexOfLastProject - projectsPerPage;
   const currentProjects = filteredProjects.slice(indexOfFirstProject, indexOfLastProject);
   const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
 
-  // Change page
   const handlePageChange = (pageNumber: number) => {
     setCurrentPage(pageNumber);
+  };
+
+  const renderPaymentOverview = (project: Project) => {
+    const totalAmount = project.payments?.totalAmount || 0;
+    const advanceAmount = project.payments?.advanceAmount || 0;
+    const paymentHistory = project.payments?.paymentHistory || [];
+    
+    const totalPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0) + advanceAmount;
+    
+    const remainingAmount = totalAmount - totalPaid;
+
+    const advancePercentage = ((advanceAmount / totalAmount) * 100).toFixed(2);
+    const totalPaidPercentage = ((totalPaid / totalAmount) * 100).toFixed(2);
+    const remainingPercentage = ((remainingAmount / totalAmount) * 100).toFixed(2);
+
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h2 className="text-xl font-semibold text-blue-600 mb-4">Payment Overview</h2>
+        <div className="grid grid-cols-3 gap-6">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="text-gray-600 mb-2">Initial Advance</h3>
+            <div className="text-2xl font-bold text-blue-600">₹{advanceAmount.toLocaleString()}</div>
+            <div className="text-sm text-gray-500">{advancePercentage}% of total</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="text-gray-600 mb-2">Total Paid</h3>
+            <div className="text-2xl font-bold text-green-600">₹{totalPaid.toLocaleString()}</div>
+            <div className="text-sm text-gray-500">{totalPaidPercentage}% of total</div>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h3 className="text-gray-600 mb-2">Remaining Amount</h3>
+            <div className="text-2xl font-bold text-red-600">₹{remainingAmount.toLocaleString()}</div>
+            <div className="text-sm text-gray-500">{remainingPercentage}% remaining</div>
+          </div>
+        </div>
+        <NextPaymentEditor project={project} onUpdate={fetchProjects} />
+      </div>
+    );
+  };
+
+  const renderPaymentForm = (projectId: string) => {
+    const calculateRemainingAmount = () => {
+      const project = projects.find(p => p.id === projectId);
+      if (!project) return 0;
+      
+      const totalAmount = project.payments?.totalAmount || 0;
+      const advanceAmount = project.payments?.advanceAmount || 0;
+      const paymentHistory = project.payments?.paymentHistory || [];
+      const totalPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0) + advanceAmount;
+      return totalAmount - totalPaid;
+    };
+
+    const remainingAmount = calculateRemainingAmount();
+    const willBeFinalPayment = remainingAmount > 0 && newPayment.amount >= remainingAmount;
+
+    const handlePaymentAmountChange = (amount: number) => {
+      setNewPayment({ ...newPayment, amount });
+      if (amount >= remainingAmount) {
+        setNextPaymentDate('');
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white p-6 rounded-lg shadow-xl w-96">
+          <h3 className="text-lg font-semibold mb-4">Add New Payment</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Amount
+              </label>
+              <div className="flex items-center justify-between gap-2">
+                <input
+                  type="number"
+                  value={newPayment.amount}
+                  onChange={(e) => handlePaymentAmountChange(parseFloat(e.target.value) || 0)}
+                  className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter amount"
+                />
+                <span className="text-sm text-gray-500">
+                  Remaining: ₹{remainingAmount}
+                </span>
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Payment Type
+              </label>
+              <select
+                value={newPayment.type}
+                onChange={(e) => setNewPayment({ ...newPayment, type: e.target.value as PaymentType })}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="installment">Installment</option>
+                <option value="final">Final Payment</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Payment Method
+              </label>
+              <select
+                value={newPayment.paymentMethod}
+                onChange={(e) => setNewPayment({ ...newPayment, paymentMethod: e.target.value as PaymentMethod })}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="bank">Bank Transfer</option>
+              </select>
+            </div>
+
+            {!willBeFinalPayment && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Next Payment Date
+                </label>
+                <input
+                  type="date"
+                  value={nextPaymentDate}
+                  onChange={(e) => setNextPaymentDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required={!willBeFinalPayment}
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Notes
+              </label>
+              <textarea
+                value={newPayment.notes}
+                onChange={(e) => setNewPayment({ ...newPayment, notes: e.target.value })}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Add any notes..."
+                rows={3}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setShowPaymentForm(false)}
+                className="px-4 py-2 border rounded-md hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleAddPayment(projectId)}
+                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+              >
+                Add Payment
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderOverallStatistics = () => {
+    const totalStatistics = projects.reduce((stats, project) => {
+      const totalAmount = project.payments?.totalAmount || 0;
+      const advanceAmount = project.payments?.advanceAmount || 0;
+      const paymentHistory = project.payments?.paymentHistory || [];
+      const totalPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0) + advanceAmount;
+      const remainingAmount = totalAmount - totalPaid;
+
+      const cashPayments = paymentHistory.reduce((sum, payment) => 
+        payment.paymentMethod === 'cash' ? sum + (payment.amount || 0) : sum, 0);
+      const bankPayments = paymentHistory.reduce((sum, payment) => 
+        payment.paymentMethod === 'bank' ? sum + (payment.amount || 0) : sum, 0);
+      const upiPayments = paymentHistory.reduce((sum, payment) => 
+        payment.paymentMethod === 'upi' ? sum + (payment.amount || 0) : sum, 0);
+
+      return {
+        totalProjects: stats.totalProjects + 1,
+        totalAmount: stats.totalAmount + totalAmount,
+        totalAdvance: stats.totalAdvance + advanceAmount,
+        totalPaid: stats.totalPaid + totalPaid,
+        totalRemaining: stats.totalRemaining + remainingAmount,
+        completedProjects: stats.completedProjects + (remainingAmount <= 0 ? 1 : 0),
+        pendingProjects: stats.pendingProjects + (remainingAmount > 0 ? 1 : 0),
+        cashPayments: stats.cashPayments + cashPayments,
+        bankPayments: stats.bankPayments + bankPayments,
+        upiPayments: stats.upiPayments + upiPayments
+      };
+    }, {
+      totalProjects: 0,
+      totalAmount: 0,
+      totalAdvance: 0,
+      totalPaid: 0,
+      totalRemaining: 0,
+      completedProjects: 0,
+      pendingProjects: 0,
+      cashPayments: 0,
+      bankPayments: 0,
+      upiPayments: 0
+    });
+
+    const collectionPercentage = ((totalStatistics.totalPaid / totalStatistics.totalAmount) * 100).toFixed(1);
+    const remainingPercentage = ((totalStatistics.totalRemaining / totalStatistics.totalAmount) * 100).toFixed(1);
+    const projectCompletionRate = ((totalStatistics.completedProjects / totalStatistics.totalProjects) * 100).toFixed(1);
+
+    return (
+      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <h2 className="text-xl font-semibold text-blue-600 mb-4">Overall Payment Summary</h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h3 className="text-sm font-medium text-blue-600 mb-2">Total Projects</h3>
+            <div className="flex justify-between items-end">
+              <div className="text-2xl font-bold text-blue-700">{totalStatistics.totalProjects}</div>
+              <div className="text-sm text-blue-600">
+                <span className="font-medium">{projectCompletionRate}%</span> Complete
+              </div>
+            </div>
+            <div className="mt-2 text-sm text-blue-600">
+              {totalStatistics.completedProjects} Completed • {totalStatistics.pendingProjects} Pending
+            </div>
+          </div>
+
+          <div className="bg-purple-50 p-4 rounded-lg">
+            <h3 className="text-sm font-medium text-purple-600 mb-2">Total Contract Value</h3>
+            <div className="text-2xl font-bold text-purple-700">₹{totalStatistics.totalAmount.toLocaleString()}</div>
+            <div className="mt-1 text-sm text-purple-600">Across all projects</div>
+          </div>
+
+          <div className="bg-green-50 p-4 rounded-lg">
+            <h3 className="text-sm font-medium text-green-600 mb-2">Total Collections</h3>
+            <div className="text-2xl font-bold text-green-700">₹{totalStatistics.totalPaid.toLocaleString()}</div>
+            <div className="mt-1 text-sm text-green-600">{collectionPercentage}% Collected</div>
+          </div>
+
+          <div className="bg-red-50 p-4 rounded-lg">
+            <h3 className="text-sm font-medium text-red-600 mb-2">Total Outstanding</h3>
+            <div className="text-2xl font-bold text-red-700">₹{totalStatistics.totalRemaining.toLocaleString()}</div>
+            <div className="mt-1 text-sm text-red-600">{remainingPercentage}% Remaining</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h4 className="text-lg font-medium mb-2">Overall Payment Progress</h4>
+            <div style={{ height: '200px' }}>
+              <Doughnut
+                data={{
+                  labels: ['Collected', 'Remaining'],
+                  datasets: [{
+                    data: [totalStatistics.totalPaid, totalStatistics.totalRemaining],
+                    backgroundColor: [
+                      'rgba(34, 197, 94, 0.6)',
+                      'rgba(239, 68, 68, 0.6)'
+                    ],
+                    borderColor: [
+                      'rgba(34, 197, 94, 1)',
+                      'rgba(239, 68, 68, 1)'
+                    ],
+                    borderWidth: 1
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'bottom'
+                    }
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h4 className="text-lg font-medium mb-2">Payment Methods Distribution</h4>
+            <div style={{ height: '200px' }}>
+              <Doughnut
+                data={{
+                  labels: ['Cash', 'Bank', 'UPI'],
+                  datasets: [{
+                    data: [
+                      totalStatistics.cashPayments,
+                      totalStatistics.bankPayments,
+                      totalStatistics.upiPayments
+                    ],
+                    backgroundColor: [
+                      'rgba(234, 179, 8, 0.6)',
+                      'rgba(59, 130, 246, 0.6)',
+                      'rgba(147, 51, 234, 0.6)'
+                    ],
+                    borderColor: [
+                      'rgba(234, 179, 8, 1)',
+                      'rgba(59, 130, 246, 1)',
+                      'rgba(147, 51, 234, 1)'
+                    ],
+                    borderWidth: 1
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'bottom'
+                    }
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="bg-gray-50 p-4 rounded-lg">
+            <h4 className="text-lg font-medium mb-2">Project Completion Status</h4>
+            <div style={{ height: '200px' }}>
+              <Doughnut
+                data={{
+                  labels: ['Completed', 'In Progress'],
+                  datasets: [{
+                    data: [
+                      totalStatistics.completedProjects,
+                      totalStatistics.pendingProjects
+                    ],
+                    backgroundColor: [
+                      'rgba(34, 197, 94, 0.6)',
+                      'rgba(59, 130, 246, 0.6)'
+                    ],
+                    borderColor: [
+                      'rgba(34, 197, 94, 1)',
+                      'rgba(59, 130, 246, 1)'
+                    ],
+                    borderWidth: 1
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'bottom'
+                    }
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <div className="flex justify-between text-sm mb-1">
+            <span className="text-gray-600">Overall Collection Progress</span>
+            <span className="text-gray-600">{collectionPercentage}%</span>
+          </div>
+          <div className="w-full h-2 bg-gray-200 rounded-full">
+            <div 
+              className="h-full bg-blue-600 rounded-full" 
+              style={{ width: `${collectionPercentage}%` }}
+            ></div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -330,7 +703,8 @@ const ProjectOverview: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Edit Project Modal */}
+      {renderOverallStatistics()}
+      
       {showEditModal && editingProjectData && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -419,19 +793,6 @@ const ProjectOverview: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Budget</label>
-                <input
-                  type="number"
-                  value={editingProjectData.budget}
-                  onChange={(e) => setEditingProjectData({
-                    ...editingProjectData,
-                    budget: Number(e.target.value)
-                  })}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-
               <div className="col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <textarea
@@ -452,7 +813,7 @@ const ProjectOverview: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Street</label>
                     <input
                       type="text"
-                      value={editingProjectData.address.street}
+                      value={editingProjectData.address?.street || ''}
                       onChange={(e) => setEditingProjectData({
                         ...editingProjectData,
                         address: {
@@ -467,7 +828,7 @@ const ProjectOverview: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
                     <input
                       type="text"
-                      value={editingProjectData.address.city}
+                      value={editingProjectData.address?.city || ''}
                       onChange={(e) => setEditingProjectData({
                         ...editingProjectData,
                         address: {
@@ -482,7 +843,7 @@ const ProjectOverview: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
                     <input
                       type="text"
-                      value={editingProjectData.address.state}
+                      value={editingProjectData.address?.state || ''}
                       onChange={(e) => setEditingProjectData({
                         ...editingProjectData,
                         address: {
@@ -497,7 +858,7 @@ const ProjectOverview: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Pincode</label>
                     <input
                       type="text"
-                      value={editingProjectData.address.pincode}
+                      value={editingProjectData.address?.pincode || ''}
                       onChange={(e) => setEditingProjectData({
                         ...editingProjectData,
                         address: {
@@ -511,120 +872,32 @@ const ProjectOverview: React.FC = () => {
                 </div>
               </div>
 
-              {/* Workers Section */}
               <div className="col-span-2 mt-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="font-medium">Project Workers</h4>
+                <div className="flex justify-end space-x-3">
                   <button
-                    onClick={handleAddWorker}
-                    className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setEditingProject(null);
+                      setEditingProjectData(null);
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
                   >
-                    Add Worker
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdateProject}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Save Changes
                   </button>
                 </div>
-                
-                <div className="space-y-4">
-                  {(editingProjectData.workers || []).map((worker, index) => (
-                    <div key={worker.id} className="bg-gray-50 p-4 rounded">
-                      <div className="flex justify-between items-start mb-3">
-                        <h5 className="font-medium">Worker #{index + 1}</h5>
-                        <button
-                          onClick={() => handleRemoveWorker(worker.id)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                          <input
-                            type="text"
-                            value={worker.name}
-                            onChange={(e) => handleWorkerChange(worker.id, 'name', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                          <input
-                            type="text"
-                            value={worker.role}
-                            onChange={(e) => handleWorkerChange(worker.id, 'role', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                          <input
-                            type="email"
-                            value={worker.email}
-                            onChange={(e) => handleWorkerChange(worker.id, 'email', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                          <input
-                            type="tel"
-                            value={worker.phone}
-                            onChange={(e) => handleWorkerChange(worker.id, 'phone', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                          <select
-                            value={worker.status}
-                            onChange={(e) => handleWorkerChange(worker.id, 'status', e.target.value)}
-                            className="w-full p-2 border rounded"
-                          >
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Assigned Tasks</label>
-                          <input
-                            type="text"
-                            value={worker.assignedTasks?.join(', ') || ''}
-                            onChange={(e) => handleWorkerChange(
-                              worker.id,
-                              'assignedTasks',
-                              e.target.value
-                            )}
-                            placeholder="Task1, Task2, Task3"
-                            className="w-full p-2 border rounded"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdateProject}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Save Changes
-                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Search Section */}
       <div className="mb-6 space-y-4">
-        {/* Main Search with Suggestions */}
         <div className="relative">
           <div className="relative">
             <input
@@ -655,7 +928,6 @@ const ProjectOverview: React.FC = () => {
             </div>
           </div>
 
-          {/* Search Suggestions Dropdown */}
           {showSearchSuggestions && searchQuery && (
             <div 
               className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border"
@@ -682,7 +954,6 @@ const ProjectOverview: React.FC = () => {
           )}
         </div>
 
-        {/* Advanced Search */}
         {showAdvancedSearch && (
           <div className="bg-white rounded-lg shadow p-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -760,7 +1031,6 @@ const ProjectOverview: React.FC = () => {
           </div>
         )}
 
-        {/* Active Filters Display */}
         {(filters.status || filters.paymentStatus || filters.dateRange !== 'all' || 
           filters.budgetMin || filters.budgetMax) && (
           <div className="flex flex-wrap gap-2">
@@ -812,285 +1082,112 @@ const ProjectOverview: React.FC = () => {
         )}
       </div>
 
-      {/* Overall Payment Summary */}
-      <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-        <h3 className="text-xl font-semibold mb-4">Overall Payment Summary</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Total Stats */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="text-lg font-medium mb-3">Total Statistics</h4>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span>Total Budget:</span>
-                <span className="font-medium">₹{projects.reduce((sum, p) => sum + p.payments.totalAmount, 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Total Collected:</span>
-                <span className="font-medium text-green-600">₹{projects.reduce((sum, p) => sum + p.payments.advanceAmount, 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Total Remaining:</span>
-                <span className="font-medium text-red-600">₹{projects.reduce((sum, p) => sum + p.payments.remainingAmount, 0).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Overall Payment Progress Chart */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="text-lg font-medium mb-2">Overall Payment Progress</h4>
-            <div style={{ height: '200px' }}>
-              <Doughnut
-                data={{
-                  labels: ['Collected', 'Remaining'],
-                  datasets: [{
-                    data: [
-                      projects.reduce((sum, p) => sum + p.payments.advanceAmount, 0),
-                      projects.reduce((sum, p) => sum + p.payments.remainingAmount, 0)
-                    ],
-                    backgroundColor: [
-                      'rgba(34, 197, 94, 0.6)',
-                      'rgba(239, 68, 68, 0.6)'
-                    ],
-                    borderColor: [
-                      'rgba(34, 197, 94, 1)',
-                      'rgba(239, 68, 68, 1)'
-                    ],
-                    borderWidth: 1
-                  }]
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'bottom'
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Payment Methods Distribution Chart */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="text-lg font-medium mb-2">Payment Methods Distribution</h4>
-            <div style={{ height: '200px' }}>
-              <Doughnut
-                data={{
-                  labels: ['Cash', 'Bank', 'UPI'],
-                  datasets: [{
-                    data: [
-                      projects.reduce((sum, p) => sum + (
-                        Array.isArray(p.payments.paymentHistory) 
-                          ? p.payments.paymentHistory.filter(payment => payment.paymentMethod === 'cash')
-                              .reduce((acc, payment) => acc + payment.amount, 0)
-                          : 0
-                      ), 0),
-                      projects.reduce((sum, p) => sum + (
-                        Array.isArray(p.payments.paymentHistory)
-                          ? p.payments.paymentHistory.filter(payment => payment.paymentMethod === 'bank')
-                              .reduce((acc, payment) => acc + payment.amount, 0)
-                          : 0
-                      ), 0),
-                      projects.reduce((sum, p) => sum + (
-                        Array.isArray(p.payments.paymentHistory)
-                          ? p.payments.paymentHistory.filter(payment => payment.paymentMethod === 'upi')
-                              .reduce((acc, payment) => acc + payment.amount, 0)
-                          : 0
-                      ), 0)
-                    ],
-                    backgroundColor: [
-                      'rgba(234, 179, 8, 0.6)',
-                      'rgba(59, 130, 246, 0.6)',
-                      'rgba(147, 51, 234, 0.6)'
-                    ],
-                    borderColor: [
-                      'rgba(234, 179, 8, 1)',
-                      'rgba(59, 130, 246, 1)',
-                      'rgba(147, 51, 234, 1)'
-                    ],
-                    borderWidth: 1
-                  }]
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'bottom'
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Projects List */}
       <div className="grid gap-6">
         {currentProjects.map((project) => (
-          <div key={project.id} className="bg-white rounded-lg shadow p-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-              <div>
-                <h3 className="text-xl font-semibold">{project.title}</h3>
-                <p className="text-gray-600">Client: {project.client}</p>
-              </div>
-              <div className="space-x-2 mt-2 md:mt-0">
-                <button
-                  onClick={() => handleEditDetails(project)}
-                  className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                >
-                  Edit Details
-                </button>
-                <button
-                  onClick={() => handleEditProject(project)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Add Payment
-                </button>
-                <button
-                  onClick={() => handleDeleteProject(project.id)}
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                >
-                  Delete Project
-                </button>
-              </div>
-            </div>
-
-            {/* Payment Details */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div className="bg-gray-50 p-4 rounded">
-                <h4 className="font-medium mb-2">Project Budget</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Total Amount:</span>
-                    <span className="font-medium">₹{project.payments.totalAmount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Initial Advance:</span>
-                    <span className="font-medium text-blue-600">
-                      ₹{project.payments.advanceAmount.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Total Paid:</span>
-                    <span className="font-medium text-green-600">
-                      ₹{(project.payments.advanceAmount + 
-                         (Array.isArray(project.payments.paymentHistory) 
-                          ? project.payments.paymentHistory.reduce((sum, payment) => sum + payment.amount, 0)
-                          : 0)).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Remaining:</span>
-                    <span className="font-medium text-red-600">₹{project.payments.remainingAmount.toLocaleString()}</span>
-                  </div>
+          <div key={project.id} className="mb-8">
+            {renderPaymentOverview(project)}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
+                <div>
+                  <h3 className="text-xl font-semibold">{project.title}</h3>
+                  <p className="text-gray-600">Client: {project.client}</p>
+                </div>
+                <div className="space-x-2 mt-2 md:mt-0">
+                  <button
+                    onClick={() => handleEditDetails(project)}
+                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                  >
+                    Edit Details
+                  </button>
+                  <button
+                    onClick={() => handleEditProject(project)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Add Payment
+                  </button>
+                  <button
+                    onClick={() => handleDeleteProject(project.id)}
+                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                  >
+                    Delete Project
+                  </button>
                 </div>
               </div>
 
-              {/* Payment Progress */}
-              <div className="bg-gray-50 p-4 rounded">
-                <h4 className="font-medium mb-2">Payment Progress</h4>
-                <div className="relative pt-1">
-                  <div className="flex mb-2 items-center justify-between">
-                    <div>
-                      <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">
-                        Progress
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-semibold inline-block text-blue-600">
-                        {((project.payments.advanceAmount / project.payments.totalAmount) * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
-                  <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-blue-200">
-                    <div
-                      style={{
-                        width: `${(project.payments.advanceAmount / project.payments.totalAmount) * 100}%`
-                      }}
-                      className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-500"
-                    ></div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Latest Payments */}
-              <div className="bg-gray-50 p-4 rounded">
-                <h4 className="font-medium mb-2">Latest Payments</h4>
-                <div className="space-y-2">
-                  {Array.isArray(project.payments.paymentHistory) && project.payments.paymentHistory.length > 0 ? (
-                    project.payments.paymentHistory.slice(-3).reverse().map((payment, index) => (
-                      <div key={index} className="flex justify-between items-center text-sm">
-                        <div>
-                          <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
-                            payment.type === 'advance' ? 'bg-blue-500' :
-                            payment.type === 'installment' ? 'bg-green-500' : 'bg-purple-500'
-                          }`}></span>
-                          <span>{new Date(payment.date).toLocaleDateString()}</span>
+              <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-4">
+                <div className="bg-gray-50 p-4 rounded">
+                  <h4 className="font-medium mb-2">Latest Payments</h4>
+                  <div className="space-y-2">
+                    {Array.isArray(project.payments.paymentHistory) && project.payments.paymentHistory.length > 0 ? (
+                      project.payments.paymentHistory.slice(-3).reverse().map((payment, index) => (
+                        <div key={index} className="flex justify-between items-center text-sm">
+                          <div>
+                            <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
+                              payment.type === 'advance' ? 'bg-blue-500' :
+                              payment.type === 'installment' ? 'bg-green-500' : 'bg-purple-500'
+                            }`}></span>
+                            <span>{new Date(payment.date).toLocaleDateString()}</span>
+                          </div>
+                          <span className="font-medium">₹{payment.amount.toLocaleString()}</span>
                         </div>
-                        <span className="font-medium">₹{payment.amount.toLocaleString()}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-gray-500 text-sm">No payment history</p>
-                  )}
+                      ))
+                    ) : (
+                      <p className="text-gray-500 text-sm">No payment history</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Payment History Table */}
-            {project.payments?.paymentHistory && project.payments.paymentHistory.length > 0 && (
-              <div className="mt-4">
-                <h4 className="text-lg font-medium mb-2">Payment History</h4>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {project.payments.paymentHistory.map((payment, index) => (
-                        <tr key={index}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {new Date(payment.date).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ₹{payment.amount.toLocaleString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {payment.type}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {payment.paymentMethod}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              payment.status === 'success' ? 'bg-green-100 text-green-800' :
-                              payment.status === 'failed' ? 'bg-red-100 text-red-800' :
-                              'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {payment.status}
-                            </span>
-                          </td>
+              {project.payments?.paymentHistory && project.payments.paymentHistory.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-lg font-medium mb-2">Payment History</h4>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {project.payments.paymentHistory.map((payment, index) => (
+                          <tr key={index}>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {new Date(payment.date).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              ₹{payment.amount.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {payment.type}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {payment.paymentMethod}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                payment.status === 'success' ? 'bg-green-100 text-green-800' :
+                                payment.status === 'failed' ? 'bg-red-100 text-red-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {payment.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Pagination */}
       {filteredProjects.length > 0 && (
         <div className="mt-6 flex justify-center items-center space-x-4">
           <button
@@ -1141,106 +1238,8 @@ const ProjectOverview: React.FC = () => {
         </div>
       )}
 
-      {/* Payment Form Modal */}
       {showPaymentForm && editingProject && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Add Payment</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
-                    <input
-                      type="text"
-                      value={newPayment.amount}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9]/g, '');
-                        setNewPayment({
-                          ...newPayment,
-                          amount: Number(value) || 0
-                        });
-                      }}
-                      className="w-full p-2 pl-8 border rounded-md"
-                      placeholder="Enter amount"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                  <input
-                    type="date"
-                    value={newPayment.date}
-                    onChange={(e) => setNewPayment({
-                      ...newPayment,
-                      date: e.target.value
-                    })}
-                    className="w-full p-2 border rounded-md"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Payment Type</label>
-                  <select
-                    value={newPayment.type}
-                    onChange={(e) => setNewPayment({
-                      ...newPayment,
-                      type: e.target.value as 'advance' | 'installment' | 'final'
-                    })}
-                    className="w-full p-2 border rounded-md"
-                  >
-                    <option value="advance">Advance</option>
-                    <option value="installment">Installment</option>
-                    <option value="final">Final</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
-                  <select
-                    value={newPayment.paymentMethod}
-                    onChange={(e) => setNewPayment({
-                      ...newPayment,
-                      paymentMethod: e.target.value as 'cash' | 'bank' | 'upi'
-                    })}
-                    className="w-full p-2 border rounded-md"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="bank">Bank Transfer</option>
-                    <option value="upi">UPI</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                  <input
-                    type="text"
-                    value={newPayment.notes}
-                    onChange={(e) => setNewPayment({
-                      ...newPayment,
-                      notes: e.target.value
-                    })}
-                    className="w-full p-2 border rounded-md"
-                    placeholder="Add notes (optional)"
-                  />
-                </div>
-              </div>
-              <div className="mt-5 flex justify-end space-x-2">
-                <button
-                  onClick={() => setShowPaymentForm(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleAddPayment(editingProject.id)}
-                  disabled={!newPayment.amount}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Add Payment
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        renderPaymentForm(editingProject.id)
       )}
       
       <ToastContainer />
