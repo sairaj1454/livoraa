@@ -7,6 +7,7 @@ import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { Project, PaymentHistory, PaymentSchedule, ProjectWorker } from '../types';
 import NextPaymentEditor from './NextPaymentEditor';
+import SendPaymentReceiptButton from './SendPaymentReceiptButton';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -1176,6 +1177,30 @@ const ProjectOverview: React.FC = () => {
                                 {payment.status}
                               </span>
                             </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+  <div className="flex items-center space-x-2">
+    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+      payment.status === 'success' ? 'bg-green-100 text-green-800' :
+      payment.status === 'failed' ? 'bg-red-100 text-red-800' :
+      'bg-yellow-100 text-yellow-800'
+    }`}>
+      {payment.status}
+    </span>
+    {payment.status === 'success' && project.clientEmail && (
+      <SendPaymentReceiptButton
+        project={project}
+        payment={payment}
+        totalPaid={project.payments?.totalAmount || 0}
+        remainingAmount={
+          (project.payments?.totalAmount || 0) - 
+          ((project.payments?.advanceAmount || 0) + 
+          (project.payments?.paymentHistory || []).reduce((sum, p) => sum + (p.amount || 0), 0))
+        }
+      />
+    )}
+  </div>
+</td>
+
                           </tr>
                         ))}
                       </tbody>

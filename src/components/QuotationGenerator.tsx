@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../config/firebase';
-import { collection, getDocs, addDoc, doc, setDoc, query, where, getDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, doc, setDoc, query, where, getDoc, Timestamp } from 'firebase/firestore';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import autoTable from 'jspdf-autotable';
@@ -24,15 +24,10 @@ interface QuotationData {
   version: string;
   date: string;
   items: QuotationItem[];
-  falseCeiling: string;
-  electrical: string;
-  painting: string;
-  falseCeilingDesc: string;
-  electricalDesc: string;
-  paintingDesc: string;
+  services: { type: string; price: number; details: string }[];
   terms: string[];
   total: number;
-  timestamp: Date;
+  timestamp: Timestamp;
 }
 
 const QuotationGenerator = () => {
@@ -44,12 +39,16 @@ const QuotationGenerator = () => {
   const [version, setVersion] = useState('V1');
   const [date, setDate] = useState(new Date().toLocaleDateString('en-GB'));
   const [items, setItems] = useState<QuotationItem[]>([]);
-  const [falseCeiling, setFalseCeiling] = useState<string>('0');
-  const [electrical, setElectrical] = useState<string>('0');
-  const [painting, setPainting] = useState<string>('0');
-  const [falseCeilingDesc, setFalseCeilingDesc] = useState<string>('');
-  const [electricalDesc, setElectricalDesc] = useState<string>('');
-  const [paintingDesc, setPaintingDesc] = useState<string>('');
+  const [services, setServices] = useState([{ type: 'False Ceiling', price: 0, details: '' }, { type: 'Electrical', price: 0, details: '' }, { type: 'Painting', price: 0, details: '' }]);
+  const [terms, setTerms] = useState<string[]>([
+    '50% advance payment required',
+    'Prices are inclusive of GST',
+    'Delivery timeline: 4-6 weeks',
+    'Warranty: 1 year on manufacturing defects',
+    'Price validity: 15 days'
+  ]);
+  const [newTerm, setNewTerm] = useState('');
+  const [editingTerm, setEditingTerm] = useState<{index: number, text: string} | null>(null);
 
   const [rooms, setRooms] = useState<string[]>(['Kitchen', 'MBR', 'CBR', 'GBR', 'Hall', 'Dining', 'Utility']);
   const [newRoomName, setNewRoomName] = useState('');
@@ -94,17 +93,13 @@ const QuotationGenerator = () => {
 
   const [editingPrice, setEditingPrice] = useState<number>(0);
 
-  const [terms, setTerms] = useState<string[]>([
-    '50% advance payment required',
-    'Prices are inclusive of GST',
-    'Delivery timeline: 4-6 weeks',
-    'Warranty: 1 year on manufacturing defects',
-    'Price validity: 15 days'
-  ]);
-  const [newTerm, setNewTerm] = useState('');
-  const [editingTerm, setEditingTerm] = useState<{index: number, text: string} | null>(null);
-
   const [isCustomerPopupOpen, setIsCustomerPopupOpen] = useState(false);
+
+  const DEFAULT_SERVICES = [
+    { type: 'False Ceiling', price: 0, details: '' },
+    { type: 'Electrical', price: 0, details: '' },
+    { type: 'Painting', price: 0, details: '' }
+  ];
 
   const fetchLatestQuotation = async (customerId: string) => {
     try {
@@ -122,39 +117,70 @@ const QuotationGenerator = () => {
       setVersion('V1'); // Default to V1
       setDate(new Date().toLocaleDateString('en-GB'));
       setItems([]);
-      setFalseCeiling('0');
-      setElectrical('0');
-      setPainting('0');
-      setFalseCeilingDesc('');
-      setElectricalDesc('');
-      setPaintingDesc('');
+      setTerms([]);
       
       if (querySnapshot.docs.length > 0) {
-        // If quotation exists, use its data
-        const latestDoc = querySnapshot.docs[0];
-        const data = latestDoc.data() as Quotation;
-        const latestQuotation = {
-          ...data,
-          id: latestDoc.id,
-        };
-
-        setSiteCode(latestQuotation.siteCode || '');
-        setSiteAddress(latestQuotation.siteAddress || '');
-        setClientName(latestQuotation.clientName || '');
+        // Find the latest quotation by timestamp
+        let latestQuotation: (QuotationData & { id: string }) | null = null;
+        let latestTimestamp = new Date(0); // Start with oldest possible date
         
-        const currentVersion = latestQuotation.version || 'V1';
-        const versionNumber = parseInt(currentVersion.substring(1)) + 1;
-        setVersion(`V${versionNumber}`);
-        
-        setItems(latestQuotation.items || []);
-        setFalseCeiling(latestQuotation.falseCeiling || '0');
-        setElectrical(latestQuotation.electrical || '0');
-        setPainting(latestQuotation.painting || '0');
-        setFalseCeilingDesc(latestQuotation.falseCeilingDesc || '');
-        setElectricalDesc(latestQuotation.electricalDesc || '');
-        setPaintingDesc(latestQuotation.paintingDesc || '');
+        querySnapshot.forEach(doc => {
+          const data = doc.data() as QuotationData;
+          const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date(0);
+          if (timestamp > latestTimestamp) {
+            latestTimestamp = timestamp;
+            latestQuotation = {
+              ...data,
+              id: doc.id,
+            };
+          }
+        });
 
-        toast.info('Loaded latest quotation details');
+        if (latestQuotation) {
+          const quotation = latestQuotation as QuotationData & { id: string };
+          setSiteCode(quotation.siteCode || '');
+          setSiteAddress(quotation.siteAddress || '');
+          setClientName(quotation.clientName || '');
+          
+          // Set version to V1 for new site code, or increment for existing site code
+          const existingVersions = querySnapshot.docs
+            .filter(doc => {
+              const data = doc.data() as QuotationData;
+              return data.siteCode === quotation.siteCode;
+            })
+            .map(doc => {
+              const data = doc.data() as QuotationData;
+              return parseInt(data.version.substring(1));
+            })
+            .sort((a, b) => b - a);
+
+          if (existingVersions.length > 0) {
+            const nextVersion = existingVersions[0] + 1;
+            setVersion(`V${nextVersion}`);
+          } else {
+            setVersion('V1');
+          }
+
+          setItems(quotation.items || []);
+          
+          // Merge existing services with default services
+          const existingServices = quotation.services || [];
+          const defaultServiceTypes = DEFAULT_SERVICES.map(s => s.type);
+          
+          // First, include all default services (either from existing or default)
+          const mergedServices = DEFAULT_SERVICES.map(defaultService => {
+            const existingService = existingServices.find(s => s.type === defaultService.type);
+            return existingService || defaultService;
+          });
+          
+          // Then, add any additional custom services
+          const customServices = existingServices.filter(service => !defaultServiceTypes.includes(service.type));
+          setServices([...mergedServices, ...customServices]);
+          
+          setTerms(quotation.terms || []);
+
+          toast.info('Loaded latest quotation details');
+        }
       } else {
         // If no quotation exists, fetch customer details from database
         const customerDoc = await getDoc(doc(db, 'customers', customerId));
@@ -171,6 +197,9 @@ const QuotationGenerator = () => {
           
           setSiteAddress(addressParts.join(', '));
           setVersion('V1'); // Set to V1 for new quotation
+          
+          // Set default services for new quotation
+          setServices(DEFAULT_SERVICES);
           
           toast.info('Started new quotation with customer details');
         }
@@ -204,6 +233,9 @@ const QuotationGenerator = () => {
     if (customer) {
       setSelectedCustomer(customerId);
       setClientName(customer.name || '');
+      
+      // Reset services to default values
+      setServices(DEFAULT_SERVICES);
       
       // Only include non-empty address components
       const addressParts = [];
@@ -374,11 +406,9 @@ const QuotationGenerator = () => {
 
   const calculateTotal = (): number => {
     let total = calculateSubtotal();
-    
-    if (falseCeiling && parseInt(falseCeiling) > 0) total += parseInt(falseCeiling);
-    if (electrical && parseInt(electrical) > 0) total += parseInt(electrical);
-    if (painting && parseInt(painting) > 0) total += parseInt(painting);
-    
+    services.forEach(service => {
+      total += service.price;
+    });
     return total;
   };
 
@@ -466,30 +496,28 @@ const QuotationGenerator = () => {
     }
   };
 
-  const hasAdditionalServices = () => {
-    return (
-      (falseCeiling !== '' && parseInt(falseCeiling) > 0) ||
-      (electrical !== '' && parseInt(electrical) > 0) ||
-      (painting !== '' && parseInt(painting) > 0)
-    );
+  const addService = () => {
+    const newService = { type: 'New Service', price: 0, details: '' };
+    setServices([...services, newService]);
   };
 
-  const getAdditionalServicesData = () => {
-    const services = [];
-    
-    if (falseCeiling !== '' && parseInt(falseCeiling) > 0) {
-      services.push(['False Ceiling', `₹${parseInt(falseCeiling).toLocaleString('en-IN')}`, falseCeilingDesc || '-']);
+  const removeService = (index: number) => {
+    if (index < 3) {
+      toast.error('Cannot remove default services');
+      return;
     }
-    
-    if (electrical !== '' && parseInt(electrical) > 0) {
-      services.push(['Electrical', `₹${parseInt(electrical).toLocaleString('en-IN')}`, electricalDesc || '-']);
+    const newServices = services.filter((_, i) => i !== index);
+    setServices(newServices);
+  };
+
+  const handleServiceChange = (index: number, field: keyof { type: string; price: number; details: string }, value: string | number) => {
+    const newServices = [...services];
+    if (field === 'price') {
+      newServices[index][field] = Number(value);
+    } else {
+      newServices[index][field] = value as string;
     }
-    
-    if (painting !== '' && parseInt(painting) > 0) {
-      services.push(['Painting', `₹${parseInt(painting).toLocaleString('en-IN')}`, paintingDesc || '-']);
-    }
-    
-    return services;
+    setServices(newServices);
   };
 
   const generatePDF = () => {
@@ -650,7 +678,7 @@ const QuotationGenerator = () => {
     });
 
     // Additional Services Section
-    if (hasAdditionalServices()) {
+    if (services.length > 0) {
       currentY += 10;
       
       // Additional Services Header
@@ -662,7 +690,13 @@ const QuotationGenerator = () => {
       currentY += 8;
 
       // Additional Services Table
-      const additionalServicesData = getAdditionalServicesData();
+      const additionalServicesData = services.map(service => {
+        return [
+          service.type,
+          `₹${service.price.toLocaleString('en-IN')}`,
+          service.details || '-'
+        ];
+      });
 
       autoTable(doc, {
         startY: currentY,
@@ -677,7 +711,7 @@ const QuotationGenerator = () => {
         },
         columnStyles: {
           0: { cellWidth: 40 },
-          1: { cellWidth: 30, halign: 'right' },
+          1: { cellWidth: 70, halign: 'center' }, // Center-align Amount column
           2: { cellWidth: 'auto' }
         },
         headStyles: {
@@ -694,7 +728,7 @@ const QuotationGenerator = () => {
       currentY = (doc as any).lastAutoTable.finalY + 10;
 
       // Additional Services Total
-      const additionalTotal = parseInt(falseCeiling) + parseInt(electrical) + parseInt(painting);
+      const additionalTotal = services.reduce((sum, service) => sum + service.price, 0);
       doc.setFontSize(10);
       doc.setTextColor(primaryColor);
       doc.setFont('helvetica', 'bold');
@@ -707,7 +741,7 @@ const QuotationGenerator = () => {
 
     // Grand total with emphasis
     const total = Object.values(roomTotals).reduce((sum, roomTotal) => sum + roomTotal, 0);
-    const grandTotal = total + parseInt(falseCeiling) + parseInt(electrical) + parseInt(painting);
+    const grandTotal = total + services.reduce((sum, service) => sum + service.price, 0);
     
     doc.setFillColor(primaryColor);
     doc.rect(15, currentY, 180, 10, 'F');
@@ -757,38 +791,49 @@ const QuotationGenerator = () => {
     setVersion('V1');
     setDate(new Date().toLocaleDateString('en-GB'));
     setItems([]);
-    setFalseCeiling('0');
-    setElectrical('0');
-    setPainting('0');
-    setFalseCeilingDesc('');
-    setElectricalDesc('');
-    setPaintingDesc('');
+    setServices(DEFAULT_SERVICES);
+    setTerms([]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // First check for existing quotations for this client
+      const quotationsRef = collection(db, 'quotations');
+      const q = query(
+        quotationsRef,
+        where('clientId', '==', selectedCustomer),
+        where('siteCode', '==', siteCode)
+      );
+      const querySnapshot = await getDocs(q);
+      
+      // Get the latest version number
+      let latestVersionNum = 0;
+      querySnapshot.forEach(doc => {
+        const data = doc.data();
+        const versionNum = parseInt(data.version.substring(1));
+        if (versionNum > latestVersionNum) {
+          latestVersionNum = versionNum;
+        }
+      });
+      
+      // Create quotation data with incremented version
       const quotationData: QuotationData = {
         clientId: selectedCustomer,
         clientName,
         customerEmail: customers.find(c => c.id === selectedCustomer)?.email || '',
         siteCode,
         siteAddress,
-        version,
+        version: `V${latestVersionNum + 1}`,
         date,
         items,
-        falseCeiling,
-        electrical,
-        painting,
-        falseCeilingDesc,
-        electricalDesc,
-        paintingDesc,
+        services,
         terms,
         total: calculateTotal(),
-        timestamp: new Date()
+        timestamp: Timestamp.now()
       };
 
-      const quotationsRef = collection(db, 'quotations');
+      // Save the quotation
       await addDoc(quotationsRef, quotationData);
       toast.success('Quotation saved successfully!', {
         position: "top-right",
@@ -853,7 +898,7 @@ const QuotationGenerator = () => {
                   value={siteCode}
                   onChange={(e) => setSiteCode(e.target.value)}
                   required
-                  className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
+                  className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 w-full text-black"
                   placeholder="Enter site code"
                 />
               </div>
@@ -883,7 +928,7 @@ const QuotationGenerator = () => {
                   value={clientName}
                   onChange={(e) => setClientName(e.target.value)}
                   required
-                  className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
+                  className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 w-full text-black"
                   placeholder="Enter client name"
                 />
               </div>
@@ -894,7 +939,7 @@ const QuotationGenerator = () => {
                   onChange={(e) => setSiteAddress(e.target.value)}
                   required
                   rows={2}
-                  className="block w-full rounded-lg border-2 border-gray-300 px-4 py-3 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
+                  className="block w-full rounded-lg border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 text-black"
                   placeholder="Enter complete site address"
                 />
               </div>
@@ -1190,6 +1235,84 @@ const QuotationGenerator = () => {
             </div>
           </div>
 
+          {/* Additional Services */}
+          <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8">
+            <div className="border-b border-gray-200 pb-4 mb-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-semibold text-gray-900">Additional Services</h2>
+                  <p className="mt-1 text-sm text-gray-500">Configure extra services and their descriptions</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addService}
+                  className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 ease-in-out"
+                >
+                  Add Service
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-12 gap-4 mb-2">
+              <div className="col-span-3">
+                <label className="block text-sm font-medium text-gray-700">Service Type</label>
+              </div>
+              <div className="col-span-3">
+                <label className="block text-sm font-medium text-gray-700">Price</label>
+              </div>
+              <div className="col-span-6">
+                <label className="block text-sm font-medium text-gray-700">Description</label>
+              </div>
+            </div>
+
+            {services.map((service, index) => (
+              <div key={index} className="grid grid-cols-12 gap-4 items-start mb-4">
+                <div className="col-span-3">
+                  <input
+                    type="text"
+                    value={service.type}
+                    onChange={(e) => handleServiceChange(index, 'type', e.target.value)}
+                    className="block w-full rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 text-black"
+                    readOnly={index < 3}
+                  />
+                </div>
+                <div className="col-span-3">
+                  <div className="flex items-center">
+                    <span className="text-gray-500 mr-2">₹</span>
+                    <input
+                      type="number"
+                      value={service.price}
+                      onChange={(e) => handleServiceChange(index, 'price', e.target.value)}
+                      className="block w-full rounded-lg border-2 border-gray-300 px-4 py-2 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 text-black"
+                    />
+                  </div>
+                </div>
+                <div className="col-span-5">
+                  <textarea
+                    value={service.details}
+                    onChange={(e) => handleServiceChange(index, 'details', e.target.value)}
+                    rows={1}
+                    className="block w-full rounded-lg border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 text-black"
+                    placeholder="Enter service details"
+                  />
+                </div>
+                <div className="col-span-1 flex justify-center">
+                  {index >= 3 && (
+                    <button
+                      type="button"
+                      onClick={() => removeService(index)}
+                      className="p-2 text-red-600 hover:text-red-900 rounded-full hover:bg-red-50"
+                    >
+                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
           {/* Terms and Conditions */}
           <div className="bg-white rounded-lg shadow-lg p-6 sm:p-8">
             <div className="border-b border-gray-200 pb-4 mb-6">
@@ -1305,7 +1428,7 @@ const QuotationGenerator = () => {
                   <button
                     type="button"
                     onClick={() => addItem(room)}
-                    className="inline-flex items-center justify-center px-6 py-2.5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 ease-in-out w-full sm:w-auto"
+                    className="inline-flex items-center justify-center px-6 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200 ease-in-out w-full sm:w-auto"
                   >
                     Add Item
                   </button>
@@ -1379,7 +1502,7 @@ const QuotationGenerator = () => {
                       )}
                       <div>
                         <label className="block text-sm font-medium text-gray-700">Rate</label>
-                        <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="relative rounded-md shadow-sm">
                           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <span className="text-gray-500 sm:text-sm">₹</span>
                           </div>
@@ -1396,7 +1519,7 @@ const QuotationGenerator = () => {
                         <button
                           type="button"
                           onClick={() => removeItem(item.id)}
-                          className="inline-flex items-center p-2 border border-transparent rounded-lg shadow-sm text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-200 ease-in-out"
+                          className="inline-flex items-center p-2 border border-transparent rounded-lg shadow-sm text-red-600 hover:bg-red-50"
                         >
                           Remove
                         </button>
@@ -1407,103 +1530,6 @@ const QuotationGenerator = () => {
               </div>
             </div>
           ))}
-
-          {/* Additional Services */}
-          <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8">
-            <div className="border-b border-gray-200 pb-4 mb-6">
-              <h2 className="text-2xl font-semibold text-gray-900">Additional Services</h2>
-              <p className="mt-1 text-sm text-gray-500">Configure extra services and their descriptions</p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* False Ceiling */}
-              <div className="bg-white rounded-lg border-2 border-gray-200 p-5 hover:border-indigo-500 hover:shadow-md transition-all duration-200">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">False Ceiling</h3>
-                  <div className="relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 sm:text-sm">₹</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={falseCeiling}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9]/g, '');
-                        setFalseCeiling(value);
-                      }}
-                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
-                      placeholder="Enter amount"
-                    />
-                  </div>
-                  <textarea
-                    value={falseCeilingDesc}
-                    onChange={(e) => setFalseCeilingDesc(e.target.value)}
-                    rows={3}
-                    className="block w-full rounded-lg border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
-                    placeholder="Enter false ceiling details"
-                  />
-                </div>
-              </div>
-
-              {/* Electrical */}
-              <div className="bg-white rounded-lg border-2 border-gray-200 p-5 hover:border-indigo-500 hover:shadow-md transition-all duration-200">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">Electrical</h3>
-                  <div className="relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 sm:text-sm">₹</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={electrical}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9]/g, '');
-                        setElectrical(value);
-                      }}
-                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
-                      placeholder="Enter amount"
-                    />
-                  </div>
-                  <textarea
-                    value={electricalDesc}
-                    onChange={(e) => setElectricalDesc(e.target.value)}
-                    rows={3}
-                    className="block w-full rounded-lg border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
-                    placeholder="Enter electrical work details"
-                  />
-                </div>
-              </div>
-
-              {/* Painting */}
-              <div className="bg-white rounded-lg border-2 border-gray-200 p-5 hover:border-indigo-500 hover:shadow-md transition-all duration-200">
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">Painting</h3>
-                  <div className="relative rounded-md shadow-sm">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <span className="text-gray-500 sm:text-sm">₹</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={painting}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/[^0-9]/g, '');
-                        setPainting(value);
-                      }}
-                      className="block w-full pl-7 pr-12 sm:text-sm border-2 border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
-                      placeholder="Enter amount"
-                    />
-                  </div>
-                  <textarea
-                    value={paintingDesc}
-                    onChange={(e) => setPaintingDesc(e.target.value)}
-                    rows={3}
-                    className="block w-full rounded-lg border-2 border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm transition-colors duration-200 ease-in-out hover:border-gray-400 text-black"
-                    placeholder="Enter painting work details"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Total Summary */}
           <div className="bg-white rounded-xl shadow-lg p-6 sm:p-8 mt-8">
