@@ -30,7 +30,7 @@ const Hero: React.FC = () => {
 
   const backgroundVariants = {
     initial: { scale: 1.1, opacity: 0 },
-    animate: { 
+    animate: {
       scale: 1,
       opacity: 1,
       transition: {
@@ -38,7 +38,7 @@ const Hero: React.FC = () => {
         ease: "easeOut"
       }
     },
-    exit: { 
+    exit: {
       scale: 1,
       opacity: 0,
       transition: {
@@ -50,7 +50,7 @@ const Hero: React.FC = () => {
 
   const overlayVariants = {
     initial: { opacity: 0 },
-    animate: { 
+    animate: {
       opacity: 1,
       transition: {
         duration: 0.5,
@@ -78,7 +78,7 @@ const Hero: React.FC = () => {
                 alt="Interior design background"
                 className="w-full h-full object-cover"
               />
-              <motion.div 
+              <motion.div
                 className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/40 to-black/70"
                 variants={overlayVariants}
                 initial="initial"
@@ -101,7 +101,7 @@ const Hero: React.FC = () => {
               className="text-white max-w-xl w-full lg:w-1/2 space-y-6 relative z-10"
             >
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-4 leading-tight">
-                Virtuous<span className="text-[#C4A484]">Interiors</span>
+                LIVORAA <span className="text-[#C4A484]">ATELIER</span>
                 <span className="block">Hyderabad</span>
               </h1>
               <p className="text-lg md:text-xl mb-6 text-gray-200">
@@ -111,18 +111,13 @@ const Hero: React.FC = () => {
                 Starting from just ₹1,49,999*
               </p>
               <div className="flex flex-wrap gap-4">
-                <button 
-                  onClick={() => {
-                    const form = document.querySelector('form');
-                    if (form) {
-                      form.scrollIntoView({ behavior: 'smooth' });
-                    }
-                  }}
-                  className="bg-[#4A2D1D] text-white px-8 py-3 rounded-full font-semibold hover:bg-[#3A1D0D] transition-all hover:scale-105"
+                <Link
+                  to="/get-quote"
+                  className="bg-[#4a2e1f] text-white px-8 py-3 rounded-full font-semibold hover:bg-[#3d261a] transition-all hover:scale-105 inline-block text-center"
                 >
                   Get Free Quote
-                </button>
-                <Link 
+                </Link>
+                <Link
                   to="/gallery"
                   className="border-2 border-white bg-white text-black px-8 py-3 rounded-full font-semibold hover:bg-gray-100 hover:text-gray-900 transition-all hover:scale-105"
                 >
@@ -183,7 +178,7 @@ const Hero: React.FC = () => {
                 </div>
                 <button
                   type="submit"
-                  className="w-full bg-[#4A2D1D] text-white py-4 rounded-xl font-semibold hover:bg-[#3A1D0D] transition-all hover:scale-105"
+                  className="w-full bg-[#4a2e1f] text-white py-4 rounded-xl font-semibold hover:bg-[#3d261a] transition-all hover:scale-105"
                 >
                   Get FREE Quote
                 </button>

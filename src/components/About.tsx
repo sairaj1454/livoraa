@@ -66,7 +66,7 @@ const About: React.FC = () => {
             transition={{ duration: 1.5 }}
             className="w-full h-full"
           >
-            <img 
+            <img
               src="https://images.unsplash.com/photo-1618221195710-dd6b41faaea6"
               alt="Interior Design"
               className="w-full h-full object-cover"
@@ -136,7 +136,7 @@ const About: React.FC = () => {
               "We believe in creating spaces that not only look beautiful but also enhance the way people live, work, and interact."
             </h2>
             <p className="text-xl text-gray-600 italic">
-              - Virtuous Interiors Team
+              - LIVORAA ATELIER Team
             </p>
           </motion.div>
         </div>
@@ -185,10 +185,10 @@ const About: React.FC = () => {
             <motion.div variants={itemVariants} className="space-y-6">
               <h2 className="text-4xl font-bold text-[#4A2D1D] mb-6">Our Journey</h2>
               <p className="text-lg text-gray-600 leading-relaxed">
-                Since our inception in 2019, Virtuous Interiors has been at the forefront of innovative interior design in Hyderabad. What started as a small studio has grown into one of the city's most trusted names in interior design and execution.
+                LIVORAA ATELIER was born from a passion to revolutionize interior design in Hyderabad. As a fresh, dynamic team, we bring innovative ideas and contemporary design solutions that reflect the evolving tastes of modern homeowners.
               </p>
               <p className="text-lg text-gray-600 leading-relaxed">
-                Our success is built on a foundation of creative excellence, technical expertise, and an unwavering commitment to client satisfaction. We've had the privilege of transforming countless spaces, each project adding to our rich tapestry of experience.
+                Our strength lies in our agility, creativity, and unwavering commitment to excellence. We combine cutting-edge design trends with timeless aesthetics, ensuring every space we create is both current and enduring. Each project is an opportunity to push boundaries and exceed expectations.
               </p>
               <div className="pt-4">
                 <motion.div
@@ -215,6 +215,53 @@ const About: React.FC = () => {
                 className="relative z-10 rounded-lg shadow-xl w-full h-[500px] object-cover"
               />
             </motion.div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Meet Our Team */}
+      <section className="bg-white py-24">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-4xl md:text-5xl font-bold text-[#4A2D1D] mb-4 uppercase tracking-tight">MEET OUR TEAM</h2>
+            <div className="w-24 h-1 bg-[#B68D40] mx-auto mb-8" />
+            <p className="text-lg text-gray-600 max-w-4xl mx-auto leading-relaxed">
+              Behind every stunning space we design is a group of passionate minds and creative hearts. Our team is a blend of visionary designers, skilled craftsmen, and detail-driven planners, all dedicated to bringing your dream interiors to life.
+            </p>
+            <p className="text-lg text-gray-600 max-w-4xl mx-auto leading-relaxed mt-4">
+              From the first sketch to the final flourish, we work together to ensure every project reflects your style, fits your lifestyle, and exceeds your expectations. With a shared love for aesthetics, functionality, and innovation, we turn empty rooms into living stories.
+            </p>
+          </motion.div>
+
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            className="grid grid-cols-1 md:grid-cols-3 gap-8"
+          >
+            {[
+              { name: "L. Tharun" },
+              { name: "Y. Chaitanya" },
+              { name: "Y. Gopi" }
+            ].map((member, index) => (
+              <motion.div
+                key={index}
+                variants={itemVariants}
+                whileHover={{ y: -10 }}
+                className="bg-[#3A2315] rounded-xl p-10 text-center shadow-2xl relative overflow-hidden group"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="text-2xl font-bold text-white mb-4 relative z-10">{member.name}</h3>
+                <div className="w-12 h-0.5 bg-[#B68D40] mx-auto relative z-10" />
+              </motion.div>
+            ))}
           </motion.div>
         </div>
       </section>

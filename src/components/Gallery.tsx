@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { db } from '../config/firebase';
 import { collection, query, getDocs, orderBy } from 'firebase/firestore';
 import { FaChevronLeft, FaChevronRight, FaSearch } from 'react-icons/fa';
+import { Image as IKImage } from '@imagekit/react';
 
 interface GalleryItem {
   id: string;
@@ -12,19 +13,17 @@ interface GalleryItem {
   dimensions: string;
   category: string;
   style: string;
-  imageData: string;
+  imageData: string; // Keep for backward compatibility/thumbnail
+  images?: string[]; // Add array for multiple images
   uploadedAt: Date;
 }
 
 const Gallery: React.FC = () => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('Bedrooms');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedImage, setSelectedImage] = useState<GalleryItem | null>(null);
-  const [galleryItems, setGalleryItems] = useState<{ [key: string]: GalleryItem[] }>({
-    'Bedrooms': [],
-    'Living Rooms': [],
-    'Dining Rooms': [],
-    'Kitchen': []
-  });
+  const [currentModalImageIndex, setCurrentModalImageIndex] = useState(0);
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [currentHeroImage, setCurrentHeroImage] = useState(0);
@@ -47,6 +46,8 @@ const Gallery: React.FC = () => {
     }
   ];
 
+  const categories = ['All', 'Custom Made', 'Bedrooms', 'Kitchen', 'Living Rooms', 'Washroom'];
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentHeroImage((prev) => (prev + 1) % heroImages.length);
@@ -61,17 +62,11 @@ const Gallery: React.FC = () => {
         const galleryRef = collection(db, 'gallery');
         const q = query(galleryRef, orderBy('uploadedAt', 'desc'));
         const querySnapshot = await getDocs(q);
-        
-        const items: { [key: string]: GalleryItem[] } = {
-          'Bedrooms': [],
-          'Living Rooms': [],
-          'Dining Rooms': [],
-          'Kitchen': []
-        };
 
+        const items: GalleryItem[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
-          const item: GalleryItem = {
+          items.push({
             id: doc.id,
             title: data.title,
             description: data.description,
@@ -79,12 +74,9 @@ const Gallery: React.FC = () => {
             category: data.category,
             style: data.style,
             imageData: data.imageData,
+            images: data.images || [data.imageData], // Fallback to imageData if images array empty
             uploadedAt: data.uploadedAt?.toDate() || new Date()
-          };
-          
-          if (items[item.category]) {
-            items[item.category].push(item);
-          }
+          });
         });
 
         setGalleryItems(items);
@@ -99,51 +91,24 @@ const Gallery: React.FC = () => {
     fetchGalleryItems();
   }, []);
 
-  const handlePrevImage = () => {
-    setCurrentHeroImage((prev) => (prev - 1 + heroImages.length) % heroImages.length);
-  };
+  const filteredItems = galleryItems.filter(item => {
+    const matchesCategory = selectedCategory === 'All' || item.category === selectedCategory;
+    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.style.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
-  const handleNextImage = () => {
-    setCurrentHeroImage((prev) => (prev + 1) % heroImages.length);
-  };
-
-  const handlePrevGalleryImage = (e: React.MouseEvent) => {
+  const handleNextModalImage = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!selectedImage) return;
-    
-    const currentCategory = selectedImage.category;
-    const currentImages = galleryItems[currentCategory] || [];
-    const currentIndex = currentImages.findIndex(item => item.id === selectedImage.id);
-    const prevIndex = (currentIndex - 1 + currentImages.length) % currentImages.length;
-    setSelectedImage(currentImages[prevIndex]);
+    if (!selectedImage || !selectedImage.images) return;
+    setCurrentModalImageIndex((prev) => (prev + 1) % selectedImage.images!.length);
   };
 
-  const handleNextGalleryImage = (e: React.MouseEvent) => {
+  const handlePrevModalImage = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!selectedImage) return;
-    
-    const currentCategory = selectedImage.category;
-    const currentImages = galleryItems[currentCategory] || [];
-    const currentIndex = currentImages.findIndex(item => item.id === selectedImage.id);
-    const nextIndex = (currentIndex + 1) % currentImages.length;
-    setSelectedImage(currentImages[nextIndex]);
-  };
-
-  const heroVariants = {
-    enter: (direction: number) => ({
-      x: direction > 0 ? 1000 : -1000,
-      opacity: 0
-    }),
-    center: {
-      zIndex: 1,
-      x: 0,
-      opacity: 1
-    },
-    exit: (direction: number) => ({
-      zIndex: 0,
-      x: direction < 0 ? 1000 : -1000,
-      opacity: 0
-    })
+    if (!selectedImage || !selectedImage.images) return;
+    setCurrentModalImageIndex((prev) => (prev - 1 + selectedImage.images!.length) % selectedImage.images!.length);
   };
 
   return (
@@ -161,8 +126,8 @@ const Gallery: React.FC = () => {
             transition={{ duration: 0.7 }}
           >
             <div className="relative h-full">
-              <div className="absolute inset-0 bg-black/50" /> {/* Darker overlay */}
-              <img 
+              <div className="absolute inset-0 bg-black/50" />
+              <IKImage
                 src={heroImages[currentHeroImage].url}
                 alt="Interior Design Gallery"
                 className="w-full h-full object-cover"
@@ -189,7 +154,6 @@ const Gallery: React.FC = () => {
         <div className="absolute inset-0 flex items-center justify-center z-10">
           <div className="container mx-auto px-4 py-8">
             <div className="max-w-4xl mx-auto text-center space-y-6 md:space-y-8">
-              {/* Title */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -204,8 +168,7 @@ const Gallery: React.FC = () => {
                 </p>
               </motion.div>
 
-              {/* Description */}
-              <motion.p 
+              <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.5 }}
@@ -214,14 +177,13 @@ const Gallery: React.FC = () => {
                 Discover our collection of meticulously crafted interior designs
               </motion.p>
 
-              {/* Buttons */}
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7 }}
                 className="flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-6 mt-8 px-4"
               >
-                <button 
+                <button
                   onClick={() => {
                     const gallerySection = document.getElementById('gallery-section');
                     gallerySection?.scrollIntoView({ behavior: 'smooth' });
@@ -231,9 +193,9 @@ const Gallery: React.FC = () => {
                   <FaSearch className="text-xl" />
                   Browse Gallery
                 </button>
-                <Link 
+                <Link
                   to="/contact-us"
-                  className="w-full sm:w-auto bg-white/90 hover:bg-white text-[#4A2D1D] px-8 py-3 rounded-lg text-lg font-semibold transition-all transform hover:scale-105 shadow-xl"
+                  className="w-full sm:w-auto bg-white/90 hover:bg-white text-[#4A2D1D] px-8 py-3 rounded-lg text-lg font-semibold transition-all transform hover:scale-105 shadow-xl text-center"
                 >
                   Book Consultation
                 </Link>
@@ -255,174 +217,224 @@ const Gallery: React.FC = () => {
         </div>
       </div>
 
-      {/* Gallery Section */}
-      <div id="gallery-section" className="bg-gray-50 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Category Tabs */}
-          <div className="flex flex-wrap justify-center gap-4 mb-12">
-            {Object.keys(galleryItems).map((category) => (
+      {/* Filter & Search Bar */}
+      <div id="gallery-section" className="sticky top-20 bg-white/80 backdrop-blur-md z-40 py-8 border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4">
+          {/* Category Filters */}
+          <div className="flex flex-wrap justify-center gap-3 mb-8">
+            {categories.map((category) => (
               <button
                 key={category}
                 onClick={() => setSelectedCategory(category)}
-                className={`px-6 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
-                  selectedCategory === category
-                    ? 'bg-[#4A2D1D] text-white shadow-lg shadow-[#4A2D1D]/30 transform -translate-y-0.5'
-                    : 'bg-white text-gray-700 hover:bg-[#C4A484]/10 hover:shadow'
-                }`}
+                className={`px-6 py-2 rounded-full text-sm font-semibold transition-all duration-300 ${selectedCategory === category
+                  ? 'bg-[#4A2D1D] text-white shadow-lg shadow-[#4A2D1D]/20'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:border-[#4A2D1D] hover:text-[#4A2D1D]'
+                  }`}
               >
                 {category}
               </button>
             ))}
           </div>
 
-          {/* Loading State */}
-          {loading && (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brown-600"></div>
-            </div>
-          )}
+          {/* Search Input */}
+          <div className="max-w-2xl mx-auto relative">
+            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by title, description, or style..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-6 py-4 rounded-2xl border border-gray-100 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-[#4A2D1D]/5 focus:border-[#4A2D1D] transition-all outline-none text-gray-800 text-lg shadow-sm"
+            />
+          </div>
 
-          {/* Error State */}
-          {error && (
-            <div className="text-red-500 text-center py-8">
-              {error}
-            </div>
-          )}
+          <div className="text-center mt-6 text-gray-400 text-sm font-medium">
+            Showing {filteredItems.length} results
+          </div>
+        </div>
+      </div>
 
-          {/* Gallery Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6 p-4">
-            {!loading && galleryItems[selectedCategory]?.map((item) => (
+      {/* Gallery Grid */}
+      <div className="max-w-7xl mx-auto px-4 py-12">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-12 h-12 border-4 border-[#4A2D1D]/20 border-t-[#4A2D1D] rounded-full animate-spin mb-4" />
+            <p className="text-[#4A2D1D] font-medium">Curating your view...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-20 text-red-500">{error}</div>
+        ) : filteredItems.length === 0 ? (
+          <div className="text-center py-20 text-gray-500">
+            No masterpieces found matching your criteria.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            {filteredItems.map((item) => (
               <motion.div
                 key={item.id}
-                whileHover={{ scale: 1.02 }}
-                className="relative bg-white rounded-xl shadow-md overflow-hidden h-[420px] sm:h-[480px]"
-                onClick={() => setSelectedImage(item)}
+                layout
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                whileHover={{ y: -10 }}
+                className="group cursor-pointer bg-white rounded-[2rem] overflow-hidden shadow-xl shadow-black/5 hover:shadow-2xl hover:shadow-[#4A2D1D]/10 transition-all duration-500 border border-gray-50"
+                onClick={() => {
+                  setSelectedImage(item);
+                  setCurrentModalImageIndex(0);
+                }}
               >
-                {/* Image Container */}
-                <div className="relative h-[65%] overflow-hidden bg-gray-100">
-                  <img
+                <div className="relative aspect-[4/5] overflow-hidden">
+                  <IKImage
                     src={item.imageData}
                     alt={item.title}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    transformation={[{ width: "400", height: "500" }]}
+                    loading="lazy"
                   />
-                  <div className="absolute inset-0 bg-black bg-opacity-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <button className="w-full bg-white/90 backdrop-blur-sm text-gray-900 py-2 rounded-lg font-medium text-sm">
-                        View Details
-                      </button>
-                    </div>
+                  <div className="absolute inset-0 bg-[#4A2D1D]/40 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-center justify-center backdrop-blur-[2px]">
+                    <span className="bg-white text-[#4A2D1D] px-8 py-3 rounded-full font-bold shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
+                      View Collection
+                    </span>
                   </div>
+                  {item.images && item.images.length > 1 && (
+                    <div className="absolute top-6 right-6 bg-black/50 backdrop-blur-md text-white px-3 py-1.5 rounded-full text-xs font-bold leading-none">
+                      +{item.images.length - 1} more
+                    </div>
+                  )}
                 </div>
-
-                {/* Content Container */}
-                <div className="p-4 h-[35%] flex flex-col">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-1">
-                    {item.title}
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                    {item.description}
-                  </p>
-                  <div className="mt-auto flex flex-wrap gap-2">
-                    <div className="inline-flex items-center px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 text-xs">
-                      <span className="mr-1">📏</span>
+                <div className="p-8">
+                  <h3 className="text-2xl font-serif text-[#4A2D1D] mb-2 line-clamp-1">{item.title}</h3>
+                  <p className="text-gray-500 text-sm mb-6 line-clamp-2 leading-relaxed">{item.description}</p>
+                  <div className="flex flex-wrap gap-2 mt-auto">
+                    <span className="px-3 py-1 bg-[#F8F3EE] text-[#4A2D1D] text-[10px] font-bold uppercase tracking-wider rounded-md border border-[#4A2D1D]/5">
                       {item.dimensions}
-                    </div>
-                    <div className="inline-flex items-center px-2.5 py-1 rounded-md bg-gray-100 text-gray-700 text-xs">
-                      <span className="mr-1">🎨</span>
+                    </span>
+                    <span className="px-3 py-1 bg-[#F8F3EE] text-[#4A2D1D] text-[10px] font-bold uppercase tracking-wider rounded-md border border-[#4A2D1D]/5">
                       {item.style}
-                    </div>
+                    </span>
                   </div>
                 </div>
               </motion.div>
             ))}
           </div>
-
-          {/* Empty State */}
-          {!loading && galleryItems[selectedCategory]?.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              No images found in this category.
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Image Modal */}
+      {/* Enhanced Modal Lighbox */}
       <AnimatePresence>
         {selectedImage && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-[#000]/70 backdrop-blur-md z-[10001] flex items-start justify-center p-4 md:p-8 overflow-y-auto"
             onClick={() => setSelectedImage(null)}
-            className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-start justify-center px-4 pt-24 md:pt-32"
           >
-            <div className="relative w-full h-[calc(100vh-8rem)] md:h-[calc(100vh-10rem)] flex items-start justify-center overflow-y-auto">
-              <motion.div
-                initial={{ scale: 0.5 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0.5 }}
-                onClick={(e) => e.stopPropagation()}
-                className="relative w-full max-w-3xl bg-white rounded-lg overflow-hidden shadow-xl mb-8"
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-[2rem] shadow-2xl max-w-6xl w-full my-auto lg:my-auto min-h-[50vh] max-h-none lg:max-h-[85vh] overflow-hidden flex flex-col lg:flex-row relative mt-24 lg:mt-0"
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="absolute top-4 right-4 z-50 p-2 bg-white/90 hover:bg-white text-[#4A2D1D] rounded-full shadow-lg transition-all"
               >
-                {/* Close Button */}
-                <button
-                  onClick={() => setSelectedImage(null)}
-                  className="absolute top-4 right-4 z-20 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
 
-                {/* Image Container */}
-                <div className="relative bg-gray-100">
-                  <img
-                    src={selectedImage.imageData}
-                    alt={selectedImage.title}
-                    className="w-full h-[40vh] md:h-[50vh] object-contain"
-                  />
-
-                  {/* Navigation Buttons */}
-                  <button
-                    onClick={handlePrevGalleryImage}
-                    className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
+              {/* Main Image View */}
+              <div className="relative flex-1 bg-gray-50 flex items-center justify-center group overflow-hidden min-h-[300px] lg:min-h-0">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentModalImageIndex}
+                    className="w-full h-full p-4 lg:p-12"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 1.05 }}
                   >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
+                    <IKImage
+                      src={selectedImage.images ? selectedImage.images[currentModalImageIndex] : selectedImage.imageData}
+                      alt={selectedImage.title}
+                      className="w-full h-full object-contain"
+                    />
+                  </motion.div>
+                </AnimatePresence>
 
-                  <button
-                    onClick={handleNextGalleryImage}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white p-2 rounded-full transition-colors"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
+                {selectedImage.images && selectedImage.images.length > 1 && (
+                  <>
+                    <button
+                      onClick={handlePrevModalImage}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/80 backdrop-blur-md text-[#4A2D1D] rounded-full shadow-lg transition-all"
+                    >
+                      <FaChevronLeft className="text-xl" />
+                    </button>
+                    <button
+                      onClick={handleNextModalImage}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/80 backdrop-blur-md text-[#4A2D1D] rounded-full shadow-lg transition-all"
+                    >
+                      <FaChevronRight className="text-xl" />
+                    </button>
 
-                {/* Content */}
-                <div className="p-6 bg-white">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-3">{selectedImage.title}</h3>
-                  <p className="text-gray-600 mb-4 text-sm">{selectedImage.description}</p>
-                  <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
-                      <span>Dimensions: {selectedImage.dimensions}</span>
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-md text-white px-3 py-1 rounded-full text-xs font-bold">
+                      {currentModalImageIndex + 1} / {selectedImage.images.length}
                     </div>
-                    <div className="flex items-center">
-                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4.586a1 1 0 01.707.293l7.414 7.414a1 1 0 01.293.707V17a4 4 0 01-4 4H7z" />
-                      </svg>
-                      <span>Style: {selectedImage.style}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Details & Thumbnails */}
+              <div className="w-full lg:w-[400px] p-6 lg:p-10 flex flex-col h-full border-t lg:border-t-0 lg:border-l border-gray-100 bg-white overflow-y-auto">
+                <div className="mb-6">
+                  <h2 className="text-2xl lg:text-3xl font-serif text-[#4A2D1D] mb-3">{selectedImage.title}</h2>
+                  <p className="text-gray-500 text-sm leading-relaxed mb-6">{selectedImage.description}</p>
+
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    <div className="p-3 bg-[#F8F3EE] rounded-xl">
+                      <span className="block text-[10px] font-bold text-[#4A2D1D]/40 uppercase mb-1">Dimensions</span>
+                      <span className="text-[#4A2D1D] text-xs font-bold">{selectedImage.dimensions}</span>
+                    </div>
+                    <div className="p-3 bg-[#F8F3EE] rounded-xl">
+                      <span className="block text-[10px] font-bold text-[#4A2D1D]/40 uppercase mb-1">Style</span>
+                      <span className="text-[#4A2D1D] text-xs font-bold">{selectedImage.style}</span>
                     </div>
                   </div>
                 </div>
-              </motion.div>
-            </div>
+
+                {selectedImage.images && selectedImage.images.length > 1 && (
+                  <div className="mb-8">
+                    <h4 className="text-[10px] font-bold text-[#4A2D1D]/40 uppercase mb-3 tracking-widest">Gallery Collection</h4>
+                    <div className="grid grid-cols-4 lg:grid-cols-3 gap-2">
+                      {selectedImage.images.map((img, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setCurrentModalImageIndex(idx)}
+                          className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${currentModalImageIndex === idx ? 'border-[#4A2D1D] scale-105 shadow-sm' : 'border-transparent opacity-60 hover:opacity-100'
+                            }`}
+                        >
+                          <IKImage
+                            src={img}
+                            className="w-full h-full object-cover"
+                            transformation={[{ width: "100", height: "100" }]}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-auto pt-6">
+                  <Link
+                    to="/get-quote"
+                    className="w-full bg-[#4A2D1D] text-white py-4 rounded-xl font-bold text-center block hover:bg-[#3d261a] transition-all shadow-lg active:scale-95"
+                  >
+                    I want something like this
+                  </Link>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

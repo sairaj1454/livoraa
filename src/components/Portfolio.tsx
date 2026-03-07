@@ -4,6 +4,7 @@ import { db } from '../config/firebase';
 import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
 import { FaChevronLeft, FaChevronRight, FaExpand, FaTimes } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
+import { Image as IKImage } from '@imagekit/react';
 
 interface GalleryImage {
   id: string;
@@ -26,7 +27,7 @@ const Portfolio: React.FC = () => {
         const galleryRef = collection(db, 'gallery');
         const q = query(galleryRef, orderBy('uploadedAt', 'desc'), limit(6));
         const querySnapshot = await getDocs(q);
-        
+
         const fetchedImages: GalleryImage[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
@@ -37,7 +38,7 @@ const Portfolio: React.FC = () => {
             description: data.description
           });
         });
-        
+
         setImages(fetchedImages);
         setLoading(false);
       } catch (error) {
@@ -77,18 +78,18 @@ const Portfolio: React.FC = () => {
     <section className="relative w-full bg-[#F8F3EE] overflow-hidden">
       {/* Background Pattern */}
       <div className="absolute inset-0 bg-[url('/pattern.png')] opacity-5"></div>
-      
+
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         {/* Section Header */}
         <div className="text-center mb-16">
-          <motion.span 
+          <motion.span
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             className="inline-block bg-[#6B4423] text-white px-4 py-1 rounded-full text-sm font-medium mb-4"
           >
             Our Portfolio
           </motion.span>
-          <motion.h2 
+          <motion.h2
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
@@ -96,12 +97,12 @@ const Portfolio: React.FC = () => {
           >
             Featured Projects
           </motion.h2>
-          <motion.div 
+          <motion.div
             initial={{ width: 0 }}
             whileInView={{ width: "100px" }}
             className="h-1 bg-[#C4A484] mx-auto mb-6"
           ></motion.div>
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
@@ -110,7 +111,7 @@ const Portfolio: React.FC = () => {
             Explore our collection of meticulously crafted interior spaces that reflect our commitment to excellence
           </motion.p>
         </div>
-        
+
         {/* Main Slider */}
         <div className="relative h-[70vh] w-full overflow-hidden rounded-3xl shadow-2xl mb-12">
           <AnimatePresence initial={false} mode="wait">
@@ -122,15 +123,16 @@ const Portfolio: React.FC = () => {
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.5 }}
             >
-              <img
+              <IKImage
                 src={images[currentIndex]?.imageData}
                 alt={images[currentIndex]?.title}
                 className="w-full h-full object-cover"
+                loading="lazy"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
-              
+
               {/* Image Details */}
-              <motion.div 
+              <motion.div
                 className="absolute bottom-0 left-0 right-0 p-8 lg:p-12"
                 initial={{ y: 50, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -149,7 +151,7 @@ const Portfolio: React.FC = () => {
               </button>
             </motion.div>
           </AnimatePresence>
-          
+
           {/* Navigation Buttons */}
           <div className="absolute bottom-6 right-6 flex gap-3">
             <motion.button
@@ -180,17 +182,17 @@ const Portfolio: React.FC = () => {
               whileInView={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
               onClick={() => setCurrentIndex(index)}
-              className={`relative group overflow-hidden rounded-2xl ${
-                index === currentIndex 
-                  ? 'ring-4 ring-[#C4A484] shadow-xl' 
-                  : 'hover:ring-2 hover:ring-[#C4A484]/50'
-              }`}
+              className={`relative group overflow-hidden rounded-2xl ${index === currentIndex
+                ? 'ring-4 ring-[#C4A484] shadow-xl'
+                : 'hover:ring-2 hover:ring-[#C4A484]/50'
+                }`}
             >
               <div className="aspect-square">
-                <img
+                <IKImage
                   src={image.imageData}
                   alt={image.title}
                   className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                  transformation={[{ width: "200", height: "200" }]}
                 />
                 <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-all duration-300"></div>
               </div>
@@ -199,7 +201,7 @@ const Portfolio: React.FC = () => {
         </div>
 
         {/* View More Button */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           className="text-center mt-16"
@@ -228,7 +230,7 @@ const Portfolio: React.FC = () => {
               exit={{ scale: 0.9 }}
               className="relative max-w-7xl w-full max-h-[90vh] rounded-3xl overflow-hidden"
             >
-              <img
+              <IKImage
                 src={selectedImage.imageData}
                 alt={selectedImage.title}
                 className="w-full h-full object-contain"

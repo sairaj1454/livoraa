@@ -23,10 +23,10 @@ Book your consultation before January 15th to lock in these exclusive offers!
 Here's to creating beautiful spaces together in 2025!
 
 Best wishes,
-Team Virtuous Interiors`
+Team LIVORAA ATELIER`
   },
   christmas: {
-    subject: "Deck Your Halls with Virtuous Interiors - Christmas Special!",
+    subject: "Deck Your Halls with LIVORAA ATELIER - Christmas Special!",
     message: `Dear [Customer Name],
 
 'Tis the season to make your home merry and bright! 
@@ -40,7 +40,7 @@ This Christmas, give your home the gift of elegance with our festive design pack
 Book before December 20th and receive a complimentary Christmas styling guide!
 
 Wishing you a wonderful holiday season,
-Team Virtuous Interiors`
+Team LIVORAA ATELIER`
   },
   diwali: {
     subject: "Illuminate Your Space this Diwali - Exclusive Interior Design Offers!",
@@ -62,10 +62,10 @@ Book before [Festival Date] to avail these illuminating offers!
 May your home shine as bright as your celebrations.
 
 Best regards,
-Team Virtuous Interiors`
+Team LIVORAA ATELIER`
   },
   holi: {
-    subject: "Add Colors to Your Home this Holi with Virtuous Interiors! ",
+    subject: "Add Colors to Your Home this Holi with LIVORAA ATELIER! ",
     message: `Dear [Customer Name],
 
 Happy Holi! 
@@ -80,10 +80,10 @@ Holi Special Offers:
 Let's make your home as colorful as this festive season!
 
 Best wishes,
-Team Virtuous Interiors`
+Team LIVORAA ATELIER`
   },
   dussehra: {
-    subject: "Celebrate New Beginnings with Virtuous Interiors this Dussehra! ",
+    subject: "Celebrate New Beginnings with LIVORAA ATELIER this Dussehra! ",
     message: `Dear [Customer Name],
 
 Happy Dussehra! 
@@ -98,7 +98,7 @@ Dussehra Special Offers:
 Start your home transformation journey with us today!
 
 Warm regards,
-Team Virtuous Interiors`
+Team LIVORAA ATELIER`
   },
   ganeshChaturthi: {
     subject: "Welcome Lord Ganesha to a Beautiful Home! ",
@@ -116,7 +116,7 @@ Festival Special Offers:
 Let's create a divine space for your celebrations!
 
 Regards,
-Team Virtuous Interiors`
+Team LIVORAA ATELIER`
   },
   sankranti: {
     subject: "Celebrate Sankranti with a Home Makeover - Special Offers!",
@@ -133,7 +133,7 @@ Our Sankranti Special Offerings:
 Book your consultation today to create a space that reflects both tradition and modern elegance.
 
 Warm regards,
-Team Virtuous Interiors`
+Team LIVORAA ATELIER`
   },
   valentines: {
     subject: "Love Where You Live - Valentine's Special Interior Offers!",
@@ -151,7 +151,7 @@ Special Couple's Offers:
 Book before February 14th to transform your space into a romantic haven.
 
 With love,
-Team Virtuous Interiors`
+Team LIVORAA ATELIER`
   }
 };
 
@@ -166,15 +166,15 @@ export const useFestivalEmailJS = () => {
   const sendFestivalEmail = async ({ to, toName, subject, message }: SendFestivalEmailParams) => {
     try {
       const response = await emailjs.send(
-        'service_z7kagc4',  
-        'template_38nrv0k', 
+        'service_z7kagc4',
+        'template_38nrv0k',
         {
           to_email: to,
           to_name: toName,
           subject: subject,
           message: message
         },
-        'wGzsvi5X7v8prOba-'  
+        'wGzsvi5X7v8prOba-'
       );
       return response;
     } catch (error) {

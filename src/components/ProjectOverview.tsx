@@ -5,6 +5,27 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  BriefcaseIcon,
+  CurrencyRupeeIcon,
+  ChartBarIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  MagnifyingGlassIcon,
+  AdjustmentsHorizontalIcon,
+  PlusIcon,
+  PencilSquareIcon,
+  TrashIcon,
+  UserIcon,
+  MapPinIcon,
+  InformationCircleIcon,
+  CalendarIcon,
+  ArrowPathIcon,
+  ChevronDownIcon,
+  ChevronUpIcon
+} from '@heroicons/react/24/outline';
+import { createNotification } from '../utils/notifications';
 import { Project, PaymentHistory, PaymentSchedule, ProjectWorker } from '../types';
 import NextPaymentEditor from './NextPaymentEditor';
 import SendPaymentReceiptButton from './SendPaymentReceiptButton';
@@ -79,7 +100,7 @@ const ProjectOverview: React.FC = () => {
 
       const projectRef = doc(db, 'projects', projectId);
       const projectDoc = await getDoc(projectRef);
-      
+
       if (!projectDoc.exists()) {
         toast.error('Project not found');
         return;
@@ -105,6 +126,14 @@ const ProjectOverview: React.FC = () => {
         }),
         'payments.nextPaymentDate': isFinalPayment ? null : nextPaymentDate
       });
+
+      await createNotification(
+        projectData.clientEmail,
+        'Payment Received',
+        `A payment of ₹${newPayment.amount.toLocaleString()} for project "${projectData.title}" has been confirmed.`,
+        'payment_update',
+        '/customer/dashboard/projects'
+      );
 
       setNewPayment({
         amount: 0,
@@ -150,10 +179,10 @@ const ProjectOverview: React.FC = () => {
   };
 
   const handleEditDetails = (project: Project) => {
-    setEditingProject(project);  
+    setEditingProject(project);
     setEditingProjectData({
       ...project,
-      id: project.id,  
+      id: project.id,
       workers: project.workers || [],
       address: project.address || {
         street: '',
@@ -173,7 +202,7 @@ const ProjectOverview: React.FC = () => {
       }
 
       const projectRef = doc(db, 'projects', editingProjectData.id);
-      
+
       const updateData = {
         title: editingProjectData.title,
         client: editingProjectData.client,
@@ -187,17 +216,38 @@ const ProjectOverview: React.FC = () => {
           city: editingProjectData.address?.city || '',
           state: editingProjectData.address?.state || '',
           pincode: editingProjectData.address?.pincode || ''
-        }
+        },
+        budget: Number(editingProjectData.budget) || 0,
+        'payments.totalAmount': Number(editingProjectData.payments?.totalAmount) || Number(editingProjectData.budget) || 0
       };
 
+      const oldStatus = projects.find(p => p.id === editingProjectData.id)?.status;
       await updateDoc(projectRef, updateData);
 
+      if (oldStatus !== editingProjectData.status) {
+        await createNotification(
+          editingProjectData.clientEmail,
+          'Project Status Updated',
+          `Your project "${editingProjectData.title}" status has changed to ${editingProjectData.status}.`,
+          'project_update',
+          '/customer/dashboard/projects'
+        );
+      } else {
+        await createNotification(
+          editingProjectData.clientEmail,
+          'Project Details Updated',
+          `The details for your project "${editingProjectData.title}" have been updated.`,
+          'project_update',
+          '/customer/dashboard/projects'
+        );
+      }
+
       await fetchProjects();
-      
+
       setShowEditModal(false);
       setEditingProject(null);
       setEditingProjectData(null);
-      
+
       toast.success('Project updated successfully');
     } catch (error) {
       console.error('Error updating project:', error);
@@ -207,7 +257,7 @@ const ProjectOverview: React.FC = () => {
 
   const handleAddWorker = () => {
     if (!editingProjectData) return;
-    
+
     const newWorker: ProjectWorker = {
       id: editingProjectData.id,
       name: editingProjectData.client,
@@ -216,9 +266,9 @@ const ProjectOverview: React.FC = () => {
       phone: editingProjectData.clientPhone,
       status: 'active',
       assignedTasks: [],
-      position: editingProjectData.client,  
-      department: '',         
-      contactNumber: editingProjectData.clientPhone  
+      position: editingProjectData.client,
+      department: '',
+      contactNumber: editingProjectData.clientPhone
     };
 
     setEditingProjectData({
@@ -255,34 +305,34 @@ const ProjectOverview: React.FC = () => {
   const getSearchSuggestions = (query: string) => {
     if (!query) return [];
     const suggestions = [];
-    
+
     suggestions.push(...projects
       .filter(p => p.title.toLowerCase().includes(query.toLowerCase()))
       .map(p => ({ type: 'Project', value: p.title })));
-    
+
     suggestions.push(...projects
       .filter(p => p.client.toLowerCase().includes(query.toLowerCase()))
       .map(p => ({ type: 'Client', value: p.client })));
-    
+
     suggestions.push(...projects
       .filter(p => p.location.toLowerCase().includes(query.toLowerCase()))
       .map(p => ({ type: 'Location', value: p.location })));
 
-    return suggestions.slice(0, 5); 
+    return suggestions.slice(0, 5);
   };
 
   const filteredProjects = projects.filter(project => {
     const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = 
+    const matchesSearch =
       project.title.toLowerCase().includes(searchLower) ||
       project.client.toLowerCase().includes(searchLower) ||
       project.location.toLowerCase().includes(searchLower);
 
     const matchesStatus = !filters.status || project.status === filters.status;
-    const matchesPaymentStatus = !filters.paymentStatus || 
+    const matchesPaymentStatus = !filters.paymentStatus ||
       project.payments.paymentStatus === filters.paymentStatus;
-    
-    const matchesBudget = 
+
+    const matchesBudget =
       (!filters.budgetMin || project.budget >= Number(filters.budgetMin)) &&
       (!filters.budgetMax || project.budget <= Number(filters.budgetMax));
 
@@ -291,7 +341,7 @@ const ProjectOverview: React.FC = () => {
       const today = new Date();
       const projectDate = new Date(project.payments.nextPaymentDate);
       const diffDays = Math.ceil((projectDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      
+
       switch (filters.dateRange) {
         case 'week':
           matchesDateRange = diffDays <= 7;
@@ -305,8 +355,8 @@ const ProjectOverview: React.FC = () => {
       }
     }
 
-    return matchesSearch && matchesStatus && matchesPaymentStatus && 
-           matchesBudget && matchesDateRange;
+    return matchesSearch && matchesStatus && matchesPaymentStatus &&
+      matchesBudget && matchesDateRange;
   });
 
   const resetFilters = () => {
@@ -333,159 +383,196 @@ const ProjectOverview: React.FC = () => {
     const totalAmount = project.payments?.totalAmount || 0;
     const advanceAmount = project.payments?.advanceAmount || 0;
     const paymentHistory = project.payments?.paymentHistory || [];
-    
+
     const totalPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0) + advanceAmount;
-    
+
     const remainingAmount = totalAmount - totalPaid;
 
-    const advancePercentage = ((advanceAmount / totalAmount) * 100).toFixed(2);
-    const totalPaidPercentage = ((totalPaid / totalAmount) * 100).toFixed(2);
-    const remainingPercentage = ((remainingAmount / totalAmount) * 100).toFixed(2);
+    const advancePercentage = totalAmount > 0 ? ((advanceAmount / totalAmount) * 100).toFixed(2) : "0";
+    const totalPaidPercentage = totalAmount > 0 ? ((totalPaid / totalAmount) * 100).toFixed(2) : "0";
+    const remainingPercentage = totalAmount > 0 ? ((remainingAmount / totalAmount) * 100).toFixed(2) : "0";
+
+    const isOverdue = project.payments?.nextPaymentDate && new Date(project.payments.nextPaymentDate) < new Date();
 
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-        <h2 className="text-xl font-semibold text-blue-600 mb-4">Payment Overview</h2>
-        <div className="grid grid-cols-3 gap-6">
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-gray-600 mb-2">Initial Advance</h3>
-            <div className="text-2xl font-bold text-blue-600">₹{advanceAmount.toLocaleString()}</div>
-            <div className="text-sm text-gray-500">{advancePercentage}% of total</div>
+      <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 mb-8">
+        <h2 className="text-xl font-black text-gray-800 mb-8 tracking-tight">Project Payment Overview</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-[#E6F0FF] p-6 rounded-[1.5rem] border border-blue-100">
+            <h3 className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-3">Initial Advance</h3>
+            <div className="text-3xl font-black text-[#1E40AF]">₹{advanceAmount.toLocaleString()}</div>
+            <div className="text-xs font-bold text-blue-500 mt-2">{advancePercentage}% of total</div>
           </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-gray-600 mb-2">Total Paid</h3>
-            <div className="text-2xl font-bold text-green-600">₹{totalPaid.toLocaleString()}</div>
-            <div className="text-sm text-gray-500">{totalPaidPercentage}% of total</div>
+          <div className="bg-[#E6FBF2] p-6 rounded-[1.5rem] border border-emerald-100">
+            <h3 className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">Total Paid</h3>
+            <div className="text-3xl font-black text-[#065F46]">₹{totalPaid.toLocaleString()}</div>
+            <div className="text-xs font-bold text-emerald-500 mt-2">{totalPaidPercentage}% of total</div>
           </div>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-gray-600 mb-2">Remaining Amount</h3>
-            <div className="text-2xl font-bold text-red-600">₹{remainingAmount.toLocaleString()}</div>
-            <div className="text-sm text-gray-500">{remainingPercentage}% remaining</div>
+          <div className="bg-[#FFF1F2] p-6 rounded-[1.5rem] border border-rose-100">
+            <h3 className="text-xs font-bold text-rose-600 uppercase tracking-widest mb-3">Remaining Amount</h3>
+            <div className="text-3xl font-black text-[#9F1239]">₹{remainingAmount.toLocaleString()}</div>
+            <div className="text-xs font-bold text-rose-500 mt-2">{remainingPercentage}% remaining</div>
           </div>
         </div>
-        <NextPaymentEditor project={project} onUpdate={fetchProjects} />
+
+        <div className="mt-8 pt-8 border-t border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div>
+              <p className="text-sm font-bold text-gray-400">Next Payment Date:</p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-lg font-bold text-gray-700">{project.payments?.nextPaymentDate || 'Not Scheduled'}</p>
+                <NextPaymentEditor project={project} onUpdate={fetchProjects} />
+              </div>
+            </div>
+          </div>
+          {isOverdue && (
+            <div className="px-4 py-1.5 bg-rose-500 text-white text-[10px] font-black rounded-lg uppercase tracking-widest animate-pulse">
+              Overdue
+            </div>
+          )}
+        </div>
       </div>
     );
   };
 
-  const renderPaymentForm = (projectId: string) => {
-    const calculateRemainingAmount = () => {
-      const project = projects.find(p => p.id === projectId);
-      if (!project) return 0;
-      
-      const totalAmount = project.payments?.totalAmount || 0;
-      const advanceAmount = project.payments?.advanceAmount || 0;
-      const paymentHistory = project.payments?.paymentHistory || [];
-      const totalPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0) + advanceAmount;
-      return totalAmount - totalPaid;
-    };
-
-    const remainingAmount = calculateRemainingAmount();
-    const willBeFinalPayment = remainingAmount > 0 && newPayment.amount >= remainingAmount;
-
-    const handlePaymentAmountChange = (amount: number) => {
-      setNewPayment({ ...newPayment, amount });
-      if (amount >= remainingAmount) {
-        setNextPaymentDate('');
-      }
-    };
+  const renderEditModal = () => {
+    if (!showEditModal || !editingProjectData) return null;
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white p-6 rounded-lg shadow-xl w-96">
-          <h3 className="text-lg font-semibold mb-4">Add New Payment</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Amount
-              </label>
-              <div className="flex items-center justify-between gap-2">
-                <input
-                  type="number"
-                  value={newPayment.amount}
-                  onChange={(e) => handlePaymentAmountChange(parseFloat(e.target.value) || 0)}
-                  className="flex-1 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter amount"
-                />
-                <span className="text-sm text-gray-500">
-                  Remaining: ₹{remainingAmount}
-                </span>
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Payment Type
-              </label>
-              <select
-                value={newPayment.type}
-                onChange={(e) => setNewPayment({ ...newPayment, type: e.target.value as PaymentType })}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="installment">Installment</option>
-                <option value="final">Final Payment</option>
-              </select>
-            </div>
+      <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-2xl border border-gray-100 max-h-[90vh] overflow-y-auto"
+        >
+          <div className="flex items-center gap-3 mb-8">
+            <PencilSquareIcon className="w-8 h-8 text-indigo-600" />
+            <h3 className="text-3xl font-black text-gray-800">Edit Project Details</h3>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Payment Method
-              </label>
-              <select
-                value={newPayment.paymentMethod}
-                onChange={(e) => setNewPayment({ ...newPayment, paymentMethod: e.target.value as PaymentMethod })}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="bank">Bank Transfer</option>
-              </select>
-            </div>
-
-            {!willBeFinalPayment && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Next Payment Date
-                </label>
-                <input
-                  type="date"
-                  value={nextPaymentDate}
-                  onChange={(e) => setNextPaymentDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required={!willBeFinalPayment}
-                />
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Notes
-              </label>
-              <textarea
-                value={newPayment.notes}
-                onChange={(e) => setNewPayment({ ...newPayment, notes: e.target.value })}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Add any notes..."
-                rows={3}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Project Title</label>
+              <input
+                type="text"
+                value={editingProjectData.title}
+                onChange={(e) => setEditingProjectData({ ...editingProjectData, title: e.target.value })}
+                className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
               />
             </div>
 
-            <div className="flex justify-end gap-2 mt-6">
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Status</label>
+              <select
+                value={editingProjectData.status}
+                onChange={(e) => setEditingProjectData({ ...editingProjectData, status: e.target.value })}
+                className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+              >
+                <option value="planning">Planning</option>
+                <option value="in progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="on hold">On Hold</option>
+              </select>
+            </div>
+
+            <div className="col-span-2 space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Total Project Value (Budget)</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={editingProjectData.payments?.totalAmount || editingProjectData.budget || 0}
+                  onChange={(e) => setEditingProjectData({
+                    ...editingProjectData,
+                    budget: parseFloat(e.target.value) || 0,
+                    payments: { ...editingProjectData.payments, totalAmount: parseFloat(e.target.value) || 0 }
+                  })}
+                  className="w-full pl-10 pr-4 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+                  placeholder="Enter total project value"
+                />
+                <CurrencyRupeeIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              </div>
+            </div>
+
+            <div className="col-span-2 space-y-4">
+              <div className="flex items-center gap-3 py-2 border-b border-gray-100">
+                <UserIcon className="w-5 h-5 text-gray-400" />
+                <span className="text-sm font-black text-gray-600 uppercase tracking-widest">Client Information</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input
+                  type="text"
+                  placeholder="Client Name"
+                  value={editingProjectData.client}
+                  onChange={(e) => setEditingProjectData({ ...editingProjectData, client: e.target.value })}
+                  className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+                />
+                <input
+                  type="email"
+                  placeholder="Client Email"
+                  value={editingProjectData.clientEmail}
+                  onChange={(e) => setEditingProjectData({ ...editingProjectData, clientEmail: e.target.value })}
+                  className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+                />
+              </div>
+            </div>
+
+            <div className="col-span-2 space-y-4">
+              <div className="flex items-center gap-3 py-2 border-b border-gray-100">
+                <MapPinIcon className="w-5 h-5 text-gray-400" />
+                <span className="text-sm font-black text-gray-600 uppercase tracking-widest">Site Address</span>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                <input
+                  type="text"
+                  placeholder="Street Address"
+                  value={editingProjectData.address?.street || ''}
+                  onChange={(e) => setEditingProjectData({
+                    ...editingProjectData,
+                    address: { ...editingProjectData.address, street: e.target.value }
+                  })}
+                  className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    placeholder="City"
+                    value={editingProjectData.address?.city || ''}
+                    onChange={(e) => setEditingProjectData({
+                      ...editingProjectData,
+                      address: { ...editingProjectData.address, city: e.target.value }
+                    })}
+                    className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+                  />
+                  <input
+                    type="text"
+                    placeholder="PIN Code"
+                    value={editingProjectData.address?.pincode || ''}
+                    onChange={(e) => setEditingProjectData({
+                      ...editingProjectData,
+                      address: { ...editingProjectData.address, pincode: e.target.value }
+                    })}
+                    className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="col-span-2 flex gap-4 pt-6 mt-6 border-t border-gray-100">
               <button
-                onClick={() => setShowPaymentForm(false)}
-                className="px-4 py-2 border rounded-md hover:bg-gray-50"
+                onClick={() => setShowEditModal(false)}
+                className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => handleAddPayment(projectId)}
-                className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                onClick={handleUpdateProject}
+                className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-colors"
               >
-                Add Payment
+                Save Changes
               </button>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     );
   };
@@ -498,12 +585,15 @@ const ProjectOverview: React.FC = () => {
       const totalPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0) + advanceAmount;
       const remainingAmount = totalAmount - totalPaid;
 
-      const cashPayments = paymentHistory.reduce((sum, payment) => 
+      const cashPayments = paymentHistory.reduce((sum, payment) =>
         payment.paymentMethod === 'cash' ? sum + (payment.amount || 0) : sum, 0);
-      const bankPayments = paymentHistory.reduce((sum, payment) => 
+      const bankPayments = paymentHistory.reduce((sum, payment) =>
         payment.paymentMethod === 'bank' ? sum + (payment.amount || 0) : sum, 0);
-      const upiPayments = paymentHistory.reduce((sum, payment) => 
+      const upiPayments = paymentHistory.reduce((sum, payment) =>
         payment.paymentMethod === 'upi' ? sum + (payment.amount || 0) : sum, 0);
+
+      const isActive = project.status.toLowerCase() === 'in progress' || project.status.toLowerCase() === 'planning';
+      const isDone = project.status.toLowerCase() === 'completed';
 
       return {
         totalProjects: stats.totalProjects + 1,
@@ -511,8 +601,8 @@ const ProjectOverview: React.FC = () => {
         totalAdvance: stats.totalAdvance + advanceAmount,
         totalPaid: stats.totalPaid + totalPaid,
         totalRemaining: stats.totalRemaining + remainingAmount,
-        completedProjects: stats.completedProjects + (remainingAmount <= 0 ? 1 : 0),
-        pendingProjects: stats.pendingProjects + (remainingAmount > 0 ? 1 : 0),
+        completedProjects: stats.completedProjects + (isDone ? 1 : 0),
+        activeProjects: stats.activeProjects + (isActive ? 1 : 0),
         cashPayments: stats.cashPayments + cashPayments,
         bankPayments: stats.bankPayments + bankPayments,
         upiPayments: stats.upiPayments + upiPayments
@@ -524,719 +614,671 @@ const ProjectOverview: React.FC = () => {
       totalPaid: 0,
       totalRemaining: 0,
       completedProjects: 0,
-      pendingProjects: 0,
+      activeProjects: 0,
       cashPayments: 0,
       bankPayments: 0,
       upiPayments: 0
     });
 
-    const collectionPercentage = ((totalStatistics.totalPaid / totalStatistics.totalAmount) * 100).toFixed(1);
-    const remainingPercentage = ((totalStatistics.totalRemaining / totalStatistics.totalAmount) * 100).toFixed(1);
-    const projectCompletionRate = ((totalStatistics.completedProjects / totalStatistics.totalProjects) * 100).toFixed(1);
+    const collectionPercentage = totalStatistics.totalAmount >
+      0
+      ? ((totalStatistics.totalPaid / totalStatistics.totalAmount) * 100).toFixed(1)
+      : "0";
+    const remainingPercentage = totalStatistics.totalAmount > 0
+      ? ((totalStatistics.totalRemaining / totalStatistics.totalAmount) * 100).toFixed(1)
+      : "0";
+    const projectCompletionRate = totalStatistics.totalProjects > 0
+      ? ((totalStatistics.completedProjects / totalStatistics.totalProjects) * 100).toFixed(1)
+      : "0";
 
     return (
-      <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-        <h2 className="text-xl font-semibold text-blue-600 mb-4">Overall Payment Summary</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-blue-600 mb-2">Total Projects</h3>
-            <div className="flex justify-between items-end">
-              <div className="text-2xl font-bold text-blue-700">{totalStatistics.totalProjects}</div>
-              <div className="text-sm text-blue-600">
-                <span className="font-medium">{projectCompletionRate}%</span> Complete
+      <div className="space-y-8 mb-12">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-4xl font-bold bg-gradient-to-r from-[#4E67E8] to-[#D946EF] bg-clip-text text-transparent">
+              Payment Dashboard
+            </h2>
+            <p className="text-gray-500 font-medium mt-1">Real-time project and payment analytics</p>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-600 rounded-2xl font-bold text-sm">
+            <motion.div
+              animate={{ opacity: [1, 0.5, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="w-2 h-2 bg-indigo-600 rounded-full"
+            />
+            Live
+          </div>
+        </div>
+
+        {/* Top Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Total Projects */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-[#4176FF] rounded-3xl p-6 text-white shadow-xl shadow-blue-100 relative overflow-hidden"
+          >
+            <div className="flex justify-between items-start relative z-10">
+              <div className="space-y-1">
+                <p className="text-xs font-bold opacity-80 uppercase tracking-wider">Total Projects</p>
+                <h3 className="text-4xl font-bold">{totalStatistics.totalProjects}</h3>
+              </div>
+              <div className="p-2 bg-white/20 rounded-xl">
+                <BriefcaseIcon className="w-6 h-6" />
               </div>
             </div>
-            <div className="mt-2 text-sm text-blue-600">
-              {totalStatistics.completedProjects} Completed • {totalStatistics.pendingProjects} Pending
+            <div className="mt-8 flex items-center gap-4 relative z-10">
+              <div>
+                <p className="text-[10px] font-bold opacity-80 uppercase">Complete</p>
+                <p className="text-sm font-bold">{projectCompletionRate}%</p>
+              </div>
+              <div className="flex gap-2">
+                <div className="px-2 py-1 bg-white/20 rounded-lg text-[10px] font-bold">
+                  {totalStatistics.completedProjects} Done
+                </div>
+                <div className="px-2 py-1 bg-white/20 rounded-lg text-[10px] font-bold">
+                  {totalStatistics.activeProjects} Active
+                </div>
+              </div>
             </div>
-          </div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
+          </motion.div>
 
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-purple-600 mb-2">Total Contract Value</h3>
-            <div className="text-2xl font-bold text-purple-700">₹{totalStatistics.totalAmount.toLocaleString()}</div>
-            <div className="mt-1 text-sm text-purple-600">Across all projects</div>
-          </div>
+          {/* Contract Value */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-[#9B4DFF] rounded-3xl p-6 text-white shadow-xl shadow-purple-100 relative overflow-hidden"
+          >
+            <div className="flex justify-between items-start relative z-10">
+              <div className="space-y-1">
+                <p className="text-xs font-bold opacity-80 uppercase tracking-wider">Contract Value</p>
+                <h3 className="text-3xl font-bold">₹{totalStatistics.totalAmount.toLocaleString()}</h3>
+              </div>
+              <div className="p-2 bg-white/20 rounded-xl">
+                <CurrencyRupeeIcon className="w-6 h-6" />
+              </div>
+            </div>
+            <div className="mt-8 relative z-10">
+              <p className="text-[10px] font-bold opacity-80 uppercase tracking-wider">Total Portfolio</p>
+            </div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
+          </motion.div>
 
-          <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-green-600 mb-2">Total Collections</h3>
-            <div className="text-2xl font-bold text-green-700">₹{totalStatistics.totalPaid.toLocaleString()}</div>
-            <div className="mt-1 text-sm text-green-600">{collectionPercentage}% Collected</div>
-          </div>
+          {/* Collections */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-[#10B981] rounded-3xl p-6 text-white shadow-xl shadow-emerald-100 relative overflow-hidden"
+          >
+            <div className="flex justify-between items-start relative z-10">
+              <div className="space-y-1">
+                <p className="text-xs font-bold opacity-80 uppercase tracking-wider">Collections</p>
+                <h3 className="text-3xl font-bold">₹{totalStatistics.totalPaid.toLocaleString()}</h3>
+              </div>
+              <div className="p-2 bg-white/20 rounded-xl">
+                <CheckCircleIcon className="w-6 h-6" />
+              </div>
+            </div>
+            <div className="mt-8 relative z-10">
+              <p className="text-[10px] font-bold opacity-80 uppercase tracking-wider">{collectionPercentage}% Received</p>
+            </div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
+          </motion.div>
 
-          <div className="bg-red-50 p-4 rounded-lg">
-            <h3 className="text-sm font-medium text-red-600 mb-2">Total Outstanding</h3>
-            <div className="text-2xl font-bold text-red-700">₹{totalStatistics.totalRemaining.toLocaleString()}</div>
-            <div className="mt-1 text-sm text-red-600">{remainingPercentage}% Remaining</div>
-          </div>
+          {/* Outstanding */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="bg-[#F43F5E] rounded-3xl p-6 text-white shadow-xl shadow-rose-100 relative overflow-hidden"
+          >
+            <div className="flex justify-between items-start relative z-10">
+              <div className="space-y-1">
+                <p className="text-xs font-bold opacity-80 uppercase tracking-wider">Outstanding</p>
+                <h3 className="text-3xl font-bold">₹{totalStatistics.totalRemaining.toLocaleString()}</h3>
+              </div>
+              <div className="p-2 bg-white/20 rounded-xl">
+                <ClockIcon className="w-6 h-6" />
+              </div>
+            </div>
+            <div className="mt-8 relative z-10">
+              <p className="text-[10px] font-bold opacity-80 uppercase tracking-wider">{remainingPercentage}% Pending</p>
+            </div>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl" />
+          </motion.div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="text-lg font-medium mb-2">Overall Payment Progress</h4>
-            <div style={{ height: '200px' }}>
-              <Doughnut
-                data={{
-                  labels: ['Collected', 'Remaining'],
-                  datasets: [{
-                    data: [totalStatistics.totalPaid, totalStatistics.totalRemaining],
-                    backgroundColor: [
-                      'rgba(34, 197, 94, 0.6)',
-                      'rgba(239, 68, 68, 0.6)'
-                    ],
-                    borderColor: [
-                      'rgba(34, 197, 94, 1)',
-                      'rgba(239, 68, 68, 1)'
-                    ],
-                    borderWidth: 1
-                  }]
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'bottom'
+        {/* Doughnut Charts Row */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {[
+            {
+              title: "Payment Progress",
+              labels: ['Collected', 'Remaining'],
+              data: [totalStatistics.totalPaid, totalStatistics.totalRemaining],
+              colors: ['#34D399', '#F87171'],
+              accent: "bg-emerald-500"
+            },
+            {
+              title: "Payment Methods",
+              labels: ['Cash', 'Bank', 'UPI'],
+              data: [totalStatistics.cashPayments, totalStatistics.bankPayments, totalStatistics.upiPayments],
+              colors: ['#FBBF24', '#60A5FA', '#A78BFA'],
+              accent: "bg-blue-500"
+            },
+            {
+              title: "Project Status",
+              labels: ['Completed', 'In Progress'],
+              data: [totalStatistics.completedProjects, totalStatistics.activeProjects],
+              colors: ['#10B981', '#4F46E5'],
+              accent: "bg-indigo-500"
+            }
+          ].map((chart, idx) => (
+            <motion.div
+              key={idx}
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className={`w-1 h-4 ${chart.accent} rounded-full`} />
+                <h4 className="font-bold text-gray-800">{chart.title}</h4>
+              </div>
+              <div className="h-48 relative">
+                <Doughnut
+                  data={{
+                    labels: chart.labels,
+                    datasets: [{
+                      data: chart.data,
+                      backgroundColor: chart.colors,
+                      borderWidth: 0,
+                    }]
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%',
+                    plugins: {
+                      legend: { display: false }
                     }
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="text-lg font-medium mb-2">Payment Methods Distribution</h4>
-            <div style={{ height: '200px' }}>
-              <Doughnut
-                data={{
-                  labels: ['Cash', 'Bank', 'UPI'],
-                  datasets: [{
-                    data: [
-                      totalStatistics.cashPayments,
-                      totalStatistics.bankPayments,
-                      totalStatistics.upiPayments
-                    ],
-                    backgroundColor: [
-                      'rgba(234, 179, 8, 0.6)',
-                      'rgba(59, 130, 246, 0.6)',
-                      'rgba(147, 51, 234, 0.6)'
-                    ],
-                    borderColor: [
-                      'rgba(234, 179, 8, 1)',
-                      'rgba(59, 130, 246, 1)',
-                      'rgba(147, 51, 234, 1)'
-                    ],
-                    borderWidth: 1
-                  }]
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'bottom'
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h4 className="text-lg font-medium mb-2">Project Completion Status</h4>
-            <div style={{ height: '200px' }}>
-              <Doughnut
-                data={{
-                  labels: ['Completed', 'In Progress'],
-                  datasets: [{
-                    data: [
-                      totalStatistics.completedProjects,
-                      totalStatistics.pendingProjects
-                    ],
-                    backgroundColor: [
-                      'rgba(34, 197, 94, 0.6)',
-                      'rgba(59, 130, 246, 0.6)'
-                    ],
-                    borderColor: [
-                      'rgba(34, 197, 94, 1)',
-                      'rgba(59, 130, 246, 1)'
-                    ],
-                    borderWidth: 1
-                  }]
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: 'bottom'
-                    }
-                  }
-                }}
-              />
-            </div>
-          </div>
+                  }}
+                />
+              </div>
+              <div className="mt-6 flex flex-wrap justify-center gap-4">
+                {chart.labels.map((label, lidx) => (
+                  <div key={lidx} className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: chart.colors[lidx] }} />
+                    <span className="text-xs font-bold text-gray-500">{label}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          ))}
         </div>
 
-        <div className="mt-6">
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-gray-600">Overall Collection Progress</span>
-            <span className="text-gray-600">{collectionPercentage}%</span>
+        {/* Overall Collection Progress Bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100"
+        >
+          <div className="flex justify-between items-end mb-4">
+            <div>
+              <h4 className="font-bold text-xl text-gray-800">Collection Progress</h4>
+              <p className="text-sm text-gray-400 font-medium">Overall payment collection status</p>
+            </div>
+            <div className="text-right">
+              <span className="text-3xl font-black text-emerald-500 tracking-tighter">{collectionPercentage}%</span>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Collected</p>
+            </div>
           </div>
-          <div className="w-full h-2 bg-gray-200 rounded-full">
-            <div 
-              className="h-full bg-blue-600 rounded-full" 
-              style={{ width: `${collectionPercentage}%` }}
-            ></div>
+          <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              whileInView={{ width: `${collectionPercentage}%` }}
+              transition={{ duration: 1, ease: "easeOut" }}
+              className="absolute inset-y-0 left-0 bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full"
+            />
           </div>
-        </div>
+          <div className="flex justify-between mt-3 px-1">
+            <span className="text-xs font-bold text-emerald-600">₹{totalStatistics.totalPaid.toLocaleString()} Collected</span>
+            <span className="text-xs font-bold text-rose-500">₹{totalStatistics.totalRemaining.toLocaleString()} Remaining</span>
+          </div>
+        </motion.div>
+      </div>
+    );
+  };
+
+  const renderPaymentForm = (projectId: string) => {
+    const calculateRemainingAmount = () => {
+      const project = projects.find(p => p.id === projectId);
+      if (!project) return 0;
+
+      const totalAmount = project.payments?.totalAmount || 0;
+      const advanceAmount = project.payments?.advanceAmount || 0;
+      const paymentHistory = project.payments?.paymentHistory || [];
+      const totalPaid = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0) + advanceAmount;
+      return totalAmount - totalPaid;
+    };
+
+    const remainingAmount = calculateRemainingAmount();
+    const willBeFinalPayment = remainingAmount > 0 && newPayment.amount >= remainingAmount;
+
+    return (
+      <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="bg-white p-8 rounded-[2.5rem] shadow-2xl w-full max-w-md border border-gray-100"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <PlusIcon className="w-6 h-6 text-indigo-600" />
+            <h3 className="text-2xl font-black text-gray-800">Add New Payment</h3>
+          </div>
+
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Amount</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={newPayment.amount}
+                  onChange={(e) => setNewPayment({ ...newPayment, amount: parseFloat(e.target.value) || 0 })}
+                  className="w-full pl-10 pr-4 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+                  placeholder="Enter amount"
+                />
+                <CurrencyRupeeIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <div className="mt-2 text-xs font-bold text-rose-500 px-1">Remaining: ₹{remainingAmount.toLocaleString()}</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Type</label>
+                <select
+                  value={newPayment.type}
+                  onChange={(e) => setNewPayment({ ...newPayment, type: e.target.value as PaymentType })}
+                  className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+                >
+                  <option value="installment">Installment</option>
+                  <option value="final">Final Payment</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Method</label>
+                <select
+                  value={newPayment.paymentMethod}
+                  onChange={(e) => setNewPayment({ ...newPayment, paymentMethod: e.target.value as PaymentMethod })}
+                  className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="bank">Bank Transfer</option>
+                </select>
+              </div>
+            </div>
+
+            {!willBeFinalPayment && (
+              <div className="space-y-2">
+                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Next Payment Date</label>
+                <input
+                  type="date"
+                  value={nextPaymentDate}
+                  onChange={(e) => setNextPaymentDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800"
+                  required
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Notes</label>
+              <textarea
+                value={newPayment.notes}
+                onChange={(e) => setNewPayment({ ...newPayment, notes: e.target.value })}
+                className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-800 min-h-[100px]"
+                placeholder="Optional notes..."
+              />
+            </div>
+
+            <div className="flex gap-4 pt-4">
+              <button
+                onClick={() => setShowPaymentForm(false)}
+                className="flex-1 py-4 bg-gray-100 text-gray-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleAddPayment(projectId)}
+                className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-colors"
+              >
+                Add Payment
+              </button>
+            </div>
+          </div>
+        </motion.div>
       </div>
     );
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="text-lg">Loading projects...</div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-gray-500 font-bold">Loading dashboard insights...</p>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="max-w-7xl mx-auto px-4 py-12 bg-gray-50 min-h-screen">
       {renderOverallStatistics()}
-      
-      {showEditModal && editingProjectData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-semibold mb-4">Edit Project Details</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Project Title</label>
-                <input
-                  type="text"
-                  value={editingProjectData.title}
-                  onChange={(e) => setEditingProjectData({
-                    ...editingProjectData,
-                    title: e.target.value
-                  })}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Client Name</label>
-                <input
-                  type="text"
-                  value={editingProjectData.client}
-                  onChange={(e) => setEditingProjectData({
-                    ...editingProjectData,
-                    client: e.target.value
-                  })}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Client Email</label>
-                <input
-                  type="email"
-                  value={editingProjectData.clientEmail}
-                  onChange={(e) => setEditingProjectData({
-                    ...editingProjectData,
-                    clientEmail: e.target.value
-                  })}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Client Phone</label>
-                <input
-                  type="tel"
-                  value={editingProjectData.clientPhone}
-                  onChange={(e) => setEditingProjectData({
-                    ...editingProjectData,
-                    clientPhone: e.target.value
-                  })}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select
-                  value={editingProjectData.status}
-                  onChange={(e) => setEditingProjectData({
-                    ...editingProjectData,
-                    status: e.target.value
-                  })}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="pending">Pending</option>
-                  <option value="in-progress">In Progress</option>
-                  <option value="completed">Completed</option>
-                  <option value="on-hold">On Hold</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <input
-                  type="text"
-                  value={editingProjectData.location}
-                  onChange={(e) => setEditingProjectData({
-                    ...editingProjectData,
-                    location: e.target.value
-                  })}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  value={editingProjectData.description}
-                  onChange={(e) => setEditingProjectData({
-                    ...editingProjectData,
-                    description: e.target.value
-                  })}
-                  rows={3}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-
-              <div className="col-span-2">
-                <h4 className="font-medium mb-2">Address</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Street</label>
-                    <input
-                      type="text"
-                      value={editingProjectData.address?.street || ''}
-                      onChange={(e) => setEditingProjectData({
-                        ...editingProjectData,
-                        address: {
-                          ...editingProjectData.address,
-                          street: e.target.value
-                        }
-                      })}
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                    <input
-                      type="text"
-                      value={editingProjectData.address?.city || ''}
-                      onChange={(e) => setEditingProjectData({
-                        ...editingProjectData,
-                        address: {
-                          ...editingProjectData.address,
-                          city: e.target.value
-                        }
-                      })}
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-                    <input
-                      type="text"
-                      value={editingProjectData.address?.state || ''}
-                      onChange={(e) => setEditingProjectData({
-                        ...editingProjectData,
-                        address: {
-                          ...editingProjectData.address,
-                          state: e.target.value
-                        }
-                      })}
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Pincode</label>
-                    <input
-                      type="text"
-                      value={editingProjectData.address?.pincode || ''}
-                      onChange={(e) => setEditingProjectData({
-                        ...editingProjectData,
-                        address: {
-                          ...editingProjectData.address,
-                          pincode: e.target.value
-                        }
-                      })}
-                      className="w-full p-2 border rounded"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-span-2 mt-6">
-                <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={() => {
-                      setShowEditModal(false);
-                      setEditingProject(null);
-                      setEditingProjectData(null);
-                    }}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleUpdateProject}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    Save Changes
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Search & Filter Bar */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="bg-white rounded-[2rem] p-8 shadow-sm border border-gray-100 mb-12"
+      >
+        <div className="flex items-center gap-3 mb-6">
+          <MagnifyingGlassIcon className="w-6 h-6 text-indigo-600" />
+          <h4 className="font-bold text-xl text-gray-800">Search & Filter Projects</h4>
         </div>
-      )}
-
-      <div className="mb-6 space-y-4">
         <div className="relative">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search by project title, client name, or location..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setShowSearchSuggestions(true);
-                setCurrentPage(1);
-              }}
-              onFocus={() => setShowSearchSuggestions(true)}
-              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 space-x-2">
-              <button
-                onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-                className="text-gray-400 hover:text-gray-600"
-                title="Advanced Search"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                </svg>
-              </button>
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-          </div>
-
-          {showSearchSuggestions && searchQuery && (
-            <div 
-              className="absolute z-10 w-full mt-1 bg-white rounded-md shadow-lg border"
-              onMouseDown={(e) => e.preventDefault()}
-            >
-              {getSearchSuggestions(searchQuery).map((suggestion, index) => (
-                <button
-                  key={index}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center space-x-2"
-                  onClick={() => {
-                    setSearchQuery(suggestion.value);
-                    setShowSearchSuggestions(false);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <span className="text-gray-500 text-sm">{suggestion.type}:</span>
-                  <span>{suggestion.value}</span>
-                </button>
-              ))}
-              {getSearchSuggestions(searchQuery).length === 0 && (
-                <div className="px-4 py-2 text-gray-500">No suggestions found</div>
-              )}
-            </div>
-          )}
+          <input
+            type="text"
+            placeholder="Search projects, clients, locations..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-12 pr-12 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 font-medium text-gray-700 placeholder:text-gray-400 shadow-inner"
+          />
+          <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400" />
+          <AdjustmentsHorizontalIcon
+            onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-400 cursor-pointer hover:text-indigo-600 transition-colors"
+          />
         </div>
 
-        {showAdvancedSearch && (
-          <div className="bg-white rounded-lg shadow p-4 space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Project Status</label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="">All Statuses</option>
-                  {uniqueStatuses.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Status</label>
-                <select
-                  value={filters.paymentStatus}
-                  onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="">All Payment Statuses</option>
-                  {uniquePaymentStatuses.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Next Payment Due</label>
-                <select
-                  value={filters.dateRange}
-                  onChange={(e) => setFilters({ ...filters, dateRange: e.target.value })}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="all">All Time</option>
-                  <option value="week">Within 1 Week</option>
-                  <option value="month">Within 1 Month</option>
-                  <option value="quarter">Within 3 Months</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Budget Range</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    placeholder="Min"
-                    value={filters.budgetMin}
-                    onChange={(e) => setFilters({ ...filters, budgetMin: e.target.value })}
-                    className="w-full p-2 border rounded"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Max"
-                    value={filters.budgetMax}
-                    onChange={(e) => setFilters({ ...filters, budgetMax: e.target.value })}
-                    className="w-full p-2 border rounded"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={resetFilters}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Reset Filters
-              </button>
-            </div>
-          </div>
-        )}
-
-        {(filters.status || filters.paymentStatus || filters.dateRange !== 'all' || 
-          filters.budgetMin || filters.budgetMax) && (
-          <div className="flex flex-wrap gap-2">
-            {filters.status && (
-              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
-                Status: {filters.status}
-                <button
-                  onClick={() => setFilters({ ...filters, status: '' })}
-                  className="ml-2 text-blue-600 hover:text-blue-800"
-                >
-                  ×
-                </button>
-              </span>
-            )}
-            {filters.paymentStatus && (
-              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
-                Payment: {filters.paymentStatus}
-                <button
-                  onClick={() => setFilters({ ...filters, paymentStatus: '' })}
-                  className="ml-2 text-blue-600 hover:text-blue-800"
-                >
-                  ×
-                </button>
-              </span>
-            )}
-            {filters.dateRange !== 'all' && (
-              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
-                Due: {filters.dateRange}
-                <button
-                  onClick={() => setFilters({ ...filters, dateRange: 'all' })}
-                  className="ml-2 text-blue-600 hover:text-blue-800"
-                >
-                  ×
-                </button>
-              </span>
-            )}
-            {(filters.budgetMin || filters.budgetMax) && (
-              <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center">
-                Budget: {filters.budgetMin || '0'} - {filters.budgetMax || '∞'}
-                <button
-                  onClick={() => setFilters({ ...filters, budgetMin: '', budgetMax: '' })}
-                  className="ml-2 text-blue-600 hover:text-blue-800"
-                >
-                  ×
-                </button>
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="grid gap-6">
-        {currentProjects.map((project) => (
-          <div key={project.id} className="mb-8">
-            {renderPaymentOverview(project)}
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4">
-                <div>
-                  <h3 className="text-xl font-semibold">{project.title}</h3>
-                  <p className="text-gray-600">Client: {project.client}</p>
-                </div>
-                <div className="space-x-2 mt-2 md:mt-0">
-                  <button
-                    onClick={() => handleEditDetails(project)}
-                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+        <AnimatePresence>
+          {showAdvancedSearch && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 pt-8 border-t border-gray-100">
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Status</label>
+                  <select
+                    value={filters.status}
+                    onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                    className="w-full p-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-700"
                   >
-                    Edit Details
+                    <option value="">All Statuses</option>
+                    {uniqueStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Timeline</label>
+                  <select
+                    value={filters.dateRange}
+                    onChange={(e) => setFilters({ ...filters, dateRange: e.target.value })}
+                    className="w-full p-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-indigo-500 font-bold text-gray-700"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="week">Coming Week</option>
+                    <option value="month">Coming Month</option>
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={resetFilters}
+                    className="w-full py-3 bg-gray-100 text-gray-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-colors"
+                  >
+                    Reset Filters
                   </button>
-                  <button
-                    onClick={() => handleEditProject(project)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      {/* Project Listings */}
+      <div className="space-y-12">
+        {currentProjects.map((project) => (
+          <motion.div
+            key={project.id}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="space-y-8"
+          >
+            {renderPaymentOverview(project)}
+
+            <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+              {/* Card Header */}
+              <div className="p-8 md:p-10 border-b border-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div>
+                  <h3 className="text-3xl font-black text-gray-900 tracking-tight">{project.title}</h3>
+                  <div className="flex items-center gap-3 mt-3">
+                    <span className="px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-wider">
+                      {project.status}
+                    </span>
+                    <span className="text-2xl font-black text-gray-400 mx-1">·</span>
+                    <span className="text-xl font-black text-gray-800">₹{(project.payments?.totalAmount || project.budget || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button onClick={() => handleEditDetails(project)} className="p-3 bg-gray-100 text-gray-700 rounded-2xl hover:bg-gray-200 transition-all">
+                    <PencilSquareIcon className="w-6 h-6" />
+                  </button>
+                  <button onClick={() => handleEditProject(project)} className="px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all">
+                    <PlusIcon className="w-5 h-5" />
                     Add Payment
                   </button>
-                  <button
-                    onClick={() => handleDeleteProject(project.id)}
-                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                  >
+                  <button onClick={() => handleDeleteProject(project.id)} className="px-6 py-3 bg-rose-600 text-white rounded-2xl font-bold hover:bg-rose-700 shadow-lg shadow-rose-100 transition-all">
                     Delete Project
                   </button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-4">
-                <div className="bg-gray-50 p-4 rounded">
-                  <h4 className="font-medium mb-2">Latest Payments</h4>
-                  <div className="space-y-2">
-                    {Array.isArray(project.payments.paymentHistory) && project.payments.paymentHistory.length > 0 ? (
-                      project.payments.paymentHistory.slice(-3).reverse().map((payment, index) => (
-                        <div key={index} className="flex justify-between items-center text-sm">
-                          <div>
-                            <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
-                              payment.type === 'advance' ? 'bg-blue-500' :
-                              payment.type === 'installment' ? 'bg-green-500' : 'bg-purple-500'
-                            }`}></span>
-                            <span>{new Date(payment.date).toLocaleDateString()}</span>
-                          </div>
-                          <span className="font-medium">₹{payment.amount.toLocaleString()}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-gray-500 text-sm">No payment history</p>
-                    )}
+              {/* Customer Information Grid */}
+              <div className="bg-[#F8FAFC] p-8 md:p-10">
+                <div className="flex items-center gap-3 mb-8">
+                  <UserIcon className="w-6 h-6 text-gray-400" />
+                  <h4 className="font-black text-xl text-gray-800">Customer Information</h4>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* Client Details */}
+                  <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-1 h-4 bg-indigo-500 rounded-full" />
+                      <h5 className="font-bold text-gray-400 text-xs uppercase tracking-widest">Client Details</h5>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Name:</p>
+                        <p className="text-lg font-black text-gray-800">{project.client}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Email:</p>
+                        <p className="text-sm font-bold text-indigo-600 break-all">{project.clientEmail}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Phone:</p>
+                        <p className="text-lg font-black text-gray-800">{project.clientPhone}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Site Address */}
+                  <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                      <h5 className="font-bold text-gray-400 text-xs uppercase tracking-widest">Site Address</h5>
+                    </div>
+                    <div className="space-y-4">
+                      <p className="text-sm font-bold text-gray-700 leading-relaxed">
+                        {project.address?.street}<br />
+                        {project.address?.city}, {project.address?.state}<br />
+                        PIN: {project.address?.pincode}
+                      </p>
+                      <div className="pt-4 border-t border-gray-50">
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Location:</p>
+                        <p className="text-sm font-bold text-gray-600">{project.location}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Project Info */}
+                  <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100">
+                    <div className="flex items-center gap-3 mb-6">
+                      <div className="w-1 h-4 bg-purple-500 rounded-full" />
+                      <h5 className="font-bold text-gray-400 text-xs uppercase tracking-widest">Project Info</h5>
+                    </div>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Budget:</p>
+                        <p className="text-lg font-black text-gray-800">₹{(project.payments?.totalAmount || project.budget || 0).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Status:</p>
+                        <p className="text-lg font-black text-gray-800">{project.status}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Description:</p>
+                        <p className="text-sm text-gray-500 font-medium line-clamp-4">{project.description}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {project.payments?.paymentHistory && project.payments.paymentHistory.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-lg font-medium mb-2">Payment History</h4>
+              {/* Recent Payments Section */}
+              <div className="p-8 md:p-10 border-t border-gray-50 bg-[#F8FAFC]/50">
+                <div className="flex items-center justify-between mb-8">
+                  <h4 className="font-black text-xl text-gray-800">Recent Payments</h4>
+                </div>
+                <div className="space-y-4">
+                  {project.payments?.paymentHistory && project.payments.paymentHistory.length > 0 ? (
+                    project.payments.paymentHistory.slice().reverse().slice(0, 2).map((payment, pidx) => (
+                      <div key={pidx} className="flex items-center justify-between p-6 bg-white rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
+                        <div className="flex items-center gap-4">
+                          <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full shadow-[0_0_10px_rgba(16,185,129,0.4)]" />
+                          <p className="text-base font-black text-gray-800">{new Date(payment.date).toLocaleDateString('en-GB')}</p>
+                        </div>
+                        <p className="text-xl font-black text-gray-900 leading-none">₹{payment.amount.toLocaleString()}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 bg-white rounded-[2rem] border-2 border-dashed border-gray-100">
+                      <p className="text-gray-400 font-bold italic">No payments recorded yet</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Complete Payment History Section */}
+              <div className="p-8 md:p-10 border-t border-gray-50">
+                <h4 className="font-black text-xl text-gray-800 mb-8">Complete Payment History</h4>
+                <div className="bg-white rounded-[2rem] border border-gray-100 overflow-hidden">
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-[#F1F5F9]/50 border-b border-gray-50">
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Amount</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Type</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Method</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Status</th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {project.payments.paymentHistory.map((payment, index) => (
-                          <tr key={index}>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              {new Date(payment.date).toLocaleDateString()}
+                      <tbody className="divide-y divide-gray-50">
+                        {project.payments?.paymentHistory && project.payments.paymentHistory.length > 0 ? (
+                          project.payments.paymentHistory.slice().reverse().map((payment, pidx) => (
+                            <tr key={pidx} className="hover:bg-gray-50/50 transition-colors">
+                              <td className="px-6 py-5 font-black text-gray-800 text-sm">
+                                {new Date(payment.date).toLocaleDateString('en-GB')}
+                              </td>
+                              <td className="px-6 py-5 font-black text-gray-900 text-base">
+                                ₹{payment.amount.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-5 text-xs font-bold text-gray-500 italic">
+                                {payment.type}
+                              </td>
+                              <td className="px-6 py-5 text-sm font-bold text-gray-700">
+                                {payment.paymentMethod}
+                              </td>
+                              <td className="px-6 py-5">
+                                <div className="flex items-center gap-3">
+                                  <span className="px-3 py-1 bg-emerald-50 text-emerald-600 text-[10px] font-black rounded-lg uppercase tracking-wider">
+                                    {payment.status}
+                                  </span>
+                                  {payment.status === 'success' && project.clientEmail && (
+                                    <div className="transform scale-90">
+                                      <SendPaymentReceiptButton
+                                        project={project}
+                                        payment={payment}
+                                        totalPaid={project.payments?.totalAmount || 0}
+                                        remainingAmount={project.payments?.totalAmount -
+                                          ((project.payments?.advanceAmount || 0) +
+                                            (project.payments?.paymentHistory || []).reduce((sum, p) => sum + (p.amount || 0), 0))}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={5} className="px-6 py-12 text-center text-gray-400 font-bold italic">
+                              No complete history available
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                              ₹{payment.amount.toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {payment.type}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {payment.paymentMethod}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                payment.status === 'success' ? 'bg-green-100 text-green-800' :
-                                payment.status === 'failed' ? 'bg-red-100 text-red-800' :
-                                'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {payment.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-  <div className="flex items-center space-x-2">
-    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-      payment.status === 'success' ? 'bg-green-100 text-green-800' :
-      payment.status === 'failed' ? 'bg-red-100 text-red-800' :
-      'bg-yellow-100 text-yellow-800'
-    }`}>
-      {payment.status}
-    </span>
-    {payment.status === 'success' && project.clientEmail && (
-      <SendPaymentReceiptButton
-        project={project}
-        payment={payment}
-        totalPaid={project.payments?.totalAmount || 0}
-        remainingAmount={
-          (project.payments?.totalAmount || 0) - 
-          ((project.payments?.advanceAmount || 0) + 
-          (project.payments?.paymentHistory || []).reduce((sum, p) => sum + (p.amount || 0), 0))
-        }
-      />
-    )}
-  </div>
-</td>
-
                           </tr>
-                        ))}
+                        )}
                       </tbody>
                     </table>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
 
       {filteredProjects.length > 0 && (
-        <div className="mt-6 flex justify-center items-center space-x-4">
+        <div className="mt-12 bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex justify-center items-center gap-4">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className={`px-4 py-2 rounded ${
-              currentPage === 1
-                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
+            className={`px-8 py-3 rounded-xl font-black text-sm transition-all ${currentPage === 1
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-[#E2E8F0] text-gray-600 hover:bg-gray-200'
+              }`}
           >
             Previous
           </button>
-          
-          <div className="flex items-center space-x-2">
+
+          <div className="flex items-center gap-3">
             {Array.from({ length: totalPages }, (_, i) => i + 1).map((number) => (
               <button
                 key={number}
                 onClick={() => handlePageChange(number)}
-                className={`w-8 h-8 rounded ${
-                  currentPage === number
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
+                className={`w-12 h-12 rounded-xl font-black text-sm transition-all ${currentPage === number
+                  ? 'bg-[#2563EB] text-white shadow-lg shadow-blue-100'
+                  : 'bg-[#E2E8F0] text-gray-500 hover:bg-gray-200'
+                  }`}
               >
                 {number}
               </button>
@@ -1246,11 +1288,10 @@ const ProjectOverview: React.FC = () => {
           <button
             onClick={() => handlePageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className={`px-4 py-2 rounded ${
-              currentPage === totalPages
-                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            }`}
+            className={`px-8 py-3 rounded-xl font-black text-sm transition-all ${currentPage === totalPages
+              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+              : 'bg-[#2563EB] text-white shadow-lg shadow-blue-100 hover:bg-blue-700'
+              }`}
           >
             Next
           </button>
@@ -1266,7 +1307,9 @@ const ProjectOverview: React.FC = () => {
       {showPaymentForm && editingProject && (
         renderPaymentForm(editingProject.id)
       )}
-      
+
+      {renderEditModal()}
+
       <ToastContainer />
     </div>
   );

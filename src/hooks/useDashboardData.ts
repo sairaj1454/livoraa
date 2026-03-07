@@ -69,11 +69,13 @@ export const useDashboardData = () => {
           projectsSnapshot,
           blogsSnapshot,
           queriesSnapshot,
+          clientEnquiriesSnapshot,
           employeesSnapshot
         ] = await Promise.all([
           getDocs(collection(db, 'projects')),
           getDocs(collection(db, 'blogs')),
           getDocs(collection(db, 'enquiries')),
+          getDocs(collection(db, 'client_enquiries')),
           getDocs(collection(db, 'employees'))
         ]);
 
@@ -82,7 +84,7 @@ export const useDashboardData = () => {
         // Get total counts
         const totalProjects = projectsSnapshot.size;
         const totalBlogs = blogsSnapshot.size;
-        const totalQueries = queriesSnapshot.size;
+        const totalQueries = queriesSnapshot.size + clientEnquiriesSnapshot.size;
         const teamMembers = employeesSnapshot.size;
 
         // Process all projects

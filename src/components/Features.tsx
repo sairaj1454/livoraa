@@ -80,7 +80,7 @@ const Features = () => {
               </span>
             </motion.div>
             <h2 className="text-3xl md:text-4xl font-bold text-white mt-4 mb-2">
-              Why Choose virtuous interiors in Hyderabad?
+              Why Choose LIVORAA ATELIER in Hyderabad?
             </h2>
             <div className="w-20 h-1 bg-white mx-auto rounded-full"></div>
           </div>

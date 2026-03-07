@@ -3,8 +3,23 @@ import { db } from '../config/firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { motion } from 'framer-motion';
+import {
+  BriefcaseIcon,
+  UserIcon,
+  CalendarDaysIcon,
+  UsersIcon,
+  CurrencyRupeeIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  TrashIcon,
+  ChevronDownIcon,
+  MapPinIcon,
+  DocumentTextIcon
+} from '@heroicons/react/24/outline';
 import CustomerSearchPopup from './CustomerSearchPopup';
 import EmployeeSearchPopup from './EmployeeSearchPopup';
+import { createNotification } from '../utils/notifications';
 
 interface ProjectWorker {
   id: string;
@@ -111,7 +126,7 @@ const ProjectUpload: React.FC = () => {
     setProjectData(prev => {
       const total = field === 'totalAmount' ? Number(value) : prev.payments.totalAmount;
       const advance = field === 'advanceAmount' ? Number(value) : prev.payments.advanceAmount;
-      
+
       return {
         ...prev,
         payments: {
@@ -225,7 +240,7 @@ const ProjectUpload: React.FC = () => {
 
       // Add the project to the projects collection
       const projectRef = await addDoc(collection(db, 'projects'), projectToSubmit);
-      
+
       // Update each employee's document with the project reference
       const updatePromises = projectData.workers.map(async (worker) => {
         if (worker.id) {
@@ -244,7 +259,16 @@ const ProjectUpload: React.FC = () => {
 
       // Wait for all employee updates to complete
       await Promise.all(updatePromises);
-      
+
+      // Notify customer
+      await createNotification(
+        projectData.clientEmail,
+        'Project Created!',
+        `Your new project "${projectData.title}" has been successfully set up. Welcome to LIVORAA ATELIER!`,
+        'project_update',
+        '/customer/projects'
+      );
+
       // Reset form
       setProjectData({
         title: '',
@@ -272,7 +296,7 @@ const ProjectUpload: React.FC = () => {
           nextPaymentDate: ''
         }
       });
-      
+
       toast.success('Project uploaded successfully!');
     } catch (err) {
       console.error('Error:', err);
@@ -324,6 +348,7 @@ const ProjectUpload: React.FC = () => {
     const customer = customers.find(c => c.id === customerId);
     if (customer) {
       setSelectedCustomer(customerId);
+      const fullAddress = `${customer.address.street}, ${customer.address.city}, ${customer.address.state} - ${customer.address.pincode}`;
       setProjectData(prev => ({
         ...prev,
         client: customer.name,
@@ -334,473 +359,291 @@ const ProjectUpload: React.FC = () => {
           city: customer.address.city,
           state: customer.address.state,
           pincode: customer.address.pincode
-        }
+        },
+        location: fullAddress
       }));
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6 text-blue-600">Add New Project</h2>
+    <div className="max-w-4xl mx-auto pb-20">
       <ToastContainer position="bottom-right" />
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Project Details */}
-        <div>
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Project Details</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Project Title *
-              </label>
+      {/* Header Banner */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-r from-[#4E67E8] via-[#8B5CF6] to-[#D946EF] rounded-t-3xl p-8 text-white shadow-xl"
+      >
+        <h2 className="text-3xl font-bold">Create New Project</h2>
+        <p className="text-indigo-100 opacity-90 mt-1">Add a new interior design project to your portfolio</p>
+      </motion.div>
+
+      <form onSubmit={handleSubmit} className="bg-gray-50/50 rounded-b-3xl shadow-xl border-x border-b border-gray-100 p-6 md:p-10 space-y-10">
+
+        {/* Section 1: Project Information */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 space-y-6">
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50">
+            <div className="bg-blue-50 p-2.5 rounded-xl">
+              <BriefcaseIcon className="w-6 h-6 text-blue-500" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800">Project Information</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Project Title *</label>
               <input
                 type="text"
                 value={projectData.title}
                 onChange={(e) => setProjectData(prev => ({ ...prev, title: e.target.value }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
+                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none text-black"
+                placeholder="Enter project title"
                 required
               />
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Budget *
-              </label>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Project Budget *</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
                 <input
                   type="text"
                   value={projectData.budget || ''}
                   onChange={(e) => {
                     const value = e.target.value.replace(/[^0-9]/g, '');
-                    setProjectData(prev => ({
-                      ...prev,
-                      budget: value ? Number(value) : 0
-                    }));
+                    setProjectData(prev => ({ ...prev, budget: value ? Number(value) : 0 }));
                   }}
-                  className="w-full p-3 pl-8 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-                  required
+                  className="w-full p-4 pl-10 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none text-black"
                   placeholder="Enter budget amount"
+                  required
                 />
               </div>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Status
-              </label>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Project Status</label>
+            <div className="relative">
               <select
                 value={projectData.status}
                 onChange={(e) => setProjectData(prev => ({ ...prev, status: e.target.value as ProjectData['status'] }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
+                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none appearance-none cursor-pointer font-medium text-black"
               >
-                <option value="Planning">Planning</option>
-                <option value="In Progress">In Progress</option>
-                <option value="On Hold">On Hold</option>
-                <option value="Completed">Completed</option>
+                <option value="Planning">📅 Planning</option>
+                <option value="In Progress">🏗️ In Progress</option>
+                <option value="On Hold">⏸️ On Hold</option>
+                <option value="Completed">✅ Completed</option>
               </select>
-            </div>
-
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
-              </label>
-              <textarea
-                value={projectData.description}
-                onChange={(e) => setProjectData(prev => ({ ...prev, description: e.target.value }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 h-32 text-black"
-              />
+              <ChevronDownIcon className="w-5 h-5 text-gray-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
           </div>
-        </div>
 
-        {/* Customer Selection */}
-        <div className="space-y-6 bg-white rounded-lg shadow p-6">
-          <div className="grid grid-cols-1 gap-6">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <label className="block text-sm font-semibold text-gray-700">
-                  Customer Details
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setManualEntry(!manualEntry);
-                    if (!manualEntry) {
-                      setSelectedCustomer('');
-                      setProjectData(prev => ({
-                        ...prev,
-                        client: '',
-                        clientEmail: '',
-                        clientPhone: '',
-                        address: {
-                          ...prev.address,
-                          street: '',
-                          city: '',
-                          state: '',
-                          pincode: ''
-                        }
-                      }));
-                    }
-                  }}
-                  className="text-sm text-indigo-600 hover:text-indigo-500 font-medium"
-                >
-                  {manualEntry ? 'Select Existing Customer' : 'Enter Manually'}
-                </button>
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Project Description</label>
+            <textarea
+              value={projectData.description}
+              onChange={(e) => setProjectData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Describe the project details, requirements, and specifications..."
+              className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none min-h-[120px] text-black"
+            />
+          </div>
+        </motion.div>
+
+        {/* Section 2: Customer Information */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 space-y-6">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-50">
+            <div className="flex items-center gap-3">
+              <div className="bg-green-50 p-2.5 rounded-xl">
+                <UserIcon className="w-6 h-6 text-green-500" />
               </div>
-
-              {!manualEntry ? (
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={customers.find(c => c.id === selectedCustomer)?.name || ''}
-                    readOnly
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer text-black"
-                    placeholder="Click to select customer"
-                    onClick={() => setIsCustomerPopupOpen(true)}
-                  />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                    <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      Customer Name
-                    </label>
-                    <input
-                      type="text"
-                      name="client"
-                      value={projectData.client}
-                      onChange={(e) => setProjectData({ ...projectData, client: e.target.value })}
-                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      Customer Email
-                    </label>
-                    <input
-                      type="email"
-                      name="clientEmail"
-                      value={projectData.clientEmail}
-                      onChange={(e) => setProjectData({ ...projectData, clientEmail: e.target.value })}
-                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      Customer Phone
-                    </label>
-                    <input
-                      type="tel"
-                      name="clientPhone"
-                      value={projectData.clientPhone}
-                      onChange={(e) => setProjectData({ ...projectData, clientPhone: e.target.value })}
-                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      Street Address
-                    </label>
-                    <input
-                      type="text"
-                      name="street"
-                      value={projectData.address.street}
-                      onChange={(e) => setProjectData(prev => ({
-                        ...prev,
-                        address: { ...prev.address, street: e.target.value }
-                      }))}
-                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
-                      placeholder="Enter street address"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      City
-                    </label>
-                    <input
-                      type="text"
-                      name="city"
-                      value={projectData.address.city}
-                      onChange={(e) => setProjectData(prev => ({
-                        ...prev,
-                        address: { ...prev.address, city: e.target.value }
-                      }))}
-                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
-                      placeholder="Enter city"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      State
-                    </label>
-                    <input
-                      type="text"
-                      name="state"
-                      value={projectData.address.state}
-                      onChange={(e) => setProjectData(prev => ({
-                        ...prev,
-                        address: { ...prev.address, state: e.target.value }
-                      }))}
-                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
-                      placeholder="Enter state"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">
-                      PIN Code
-                    </label>
-                    <input
-                      type="text"
-                      name="pincode"
-                      value={projectData.address.pincode}
-                      onChange={(e) => setProjectData(prev => ({
-                        ...prev,
-                        address: { ...prev.address, pincode: e.target.value }
-                      }))}
-                      pattern="[0-9]{6}"
-                      className="block w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out hover:border-indigo-300"
-                      placeholder="Enter 6-digit PIN code"
-                    />
-                  </div>
-                </div>
-              )}
+              <h3 className="text-xl font-bold text-gray-800">Customer Information</h3>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setManualEntry(!manualEntry);
+                if (!manualEntry) {
+                  setSelectedCustomer('');
+                  setProjectData(prev => ({
+                    ...prev,
+                    client: '', clientEmail: '', clientPhone: '',
+                    address: { ...prev.address, street: '', city: '', state: '', pincode: '' }
+                  }));
+                }
+              }}
+              className="px-4 py-2 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-2"
+            >
+              <PencilSquareIcon className="w-4 h-4" />
+              {manualEntry ? 'Select Existing' : 'Enter Manually'}
+            </button>
+          </div>
 
-            {/* Project Title */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Location
-              </label>
+          {!manualEntry ? (
+            <div className="relative group" onClick={() => setIsCustomerPopupOpen(true)}>
+              <input
+                type="text"
+                value={customers.find(c => c.id === selectedCustomer)?.name || ''}
+                readOnly
+                className="w-full p-4 pr-12 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none cursor-pointer text-black"
+                placeholder="Click to select an existing customer"
+              />
+              <ChevronDownIcon className="w-5 h-5 text-gray-400 absolute right-4 top-1/2 -translate-y-1/2 group-hover:text-indigo-500 transition-colors" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <input type="text" placeholder="Customer Name" value={projectData.client} onChange={(e) => setProjectData({ ...projectData, client: e.target.value })} className="p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-black" />
+              <input type="email" placeholder="Customer Email" value={projectData.clientEmail} onChange={(e) => setProjectData({ ...projectData, clientEmail: e.target.value })} className="p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-black" />
+              <input type="tel" placeholder="Customer Phone" value={projectData.clientPhone} onChange={(e) => setProjectData({ ...projectData, clientPhone: e.target.value })} className="p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-black" />
+              <input type="text" placeholder="Street Address" value={projectData.address.street} onChange={(e) => setProjectData(p => ({ ...p, address: { ...p.address, street: e.target.value } }))} className="p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-black" />
+              <input type="text" placeholder="City" value={projectData.address.city} onChange={(e) => setProjectData(p => ({ ...p, address: { ...p.address, city: e.target.value } }))} className="p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-black" />
+              <input type="text" placeholder="State" value={projectData.address.state} onChange={(e) => setProjectData(p => ({ ...p, address: { ...p.address, state: e.target.value } }))} className="p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-black" />
+              <input type="text" placeholder="PIN Code" value={projectData.address.pincode} onChange={(e) => setProjectData(p => ({ ...p, address: { ...p.address, pincode: e.target.value } }))} className="p-4 bg-gray-50 border border-gray-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 text-black" />
+            </div>
+          )}
+
+          <div className="space-y-2 pt-4">
+            <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Project Location</label>
+            <div className="relative">
               <input
                 type="text"
                 value={projectData.location}
                 onChange={(e) => setProjectData(prev => ({ ...prev, location: e.target.value }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
+                className="w-full p-4 pl-12 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none text-black"
+                placeholder="Specific location or landmark details"
               />
+              <MapPinIcon className="w-6 h-6 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <CustomerSearchPopup
-          customers={customers}
-          isOpen={isCustomerPopupOpen}
-          onClose={() => setIsCustomerPopupOpen(false)}
-          onSelect={(customer) => handleCustomerSelect(customer.id)}
-        />
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Start Date *
-            </label>
-            <input
-              type="date"
-              value={projectData.startDate}
-              onChange={(e) => setProjectData(prev => ({ ...prev, startDate: e.target.value }))}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Expected End Date
-            </label>
-            <input
-              type="date"
-              value={projectData.endDate}
-              onChange={(e) => setProjectData(prev => ({ ...prev, endDate: e.target.value }))}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Budget
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
-              <input
-                type="text"
-                value={projectData.budget || ''}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, '');
-                  setProjectData(prev => ({
-                    ...prev,
-                    budget: value ? Number(value) : 0
-                  }));
-                }}
-                className="w-full p-3 pl-8 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-                placeholder="Enter budget amount"
-              />
+        {/* Section 3: Project Timeline */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 space-y-6">
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50">
+            <div className="bg-purple-50 p-2.5 rounded-xl">
+              <CalendarDaysIcon className="w-6 h-6 text-purple-500" />
             </div>
+            <h3 className="text-xl font-bold text-gray-800">Project Timeline</h3>
           </div>
-        </div>
 
-        {/* Address Fields */}
-        <div className="col-span-2">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Project Address</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Street Address *
-              </label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Start Date *</label>
               <input
-                type="text"
-                value={projectData.address.street}
-                onChange={(e) => setProjectData(prev => ({
-                  ...prev,
-                  address: { ...prev.address, street: e.target.value }
-                }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
+                type="date"
+                value={projectData.startDate}
+                onChange={(e) => setProjectData(prev => ({ ...prev, startDate: e.target.value }))}
+                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none text-black"
                 required
-                placeholder="Street address, apartment, suite, etc."
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                City *
-              </label>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Expected End Date</label>
               <input
-                type="text"
-                value={projectData.address.city}
-                onChange={(e) => setProjectData(prev => ({
-                  ...prev,
-                  address: { ...prev.address, city: e.target.value }
-                }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-                required
-                placeholder="City"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                State *
-              </label>
-              <input
-                type="text"
-                value={projectData.address.state}
-                onChange={(e) => setProjectData(prev => ({
-                  ...prev,
-                  address: { ...prev.address, state: e.target.value }
-                }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-                required
-                placeholder="State"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                PIN Code *
-              </label>
-              <input
-                type="text"
-                value={projectData.address.pincode}
-                onChange={(e) => setProjectData(prev => ({
-                  ...prev,
-                  address: { ...prev.address, pincode: e.target.value }
-                }))}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-                required
-                pattern="[0-9]{6}"
-                placeholder="6-digit PIN code"
+                type="date"
+                value={projectData.endDate}
+                onChange={(e) => setProjectData(prev => ({ ...prev, endDate: e.target.value }))}
+                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none text-black"
               />
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Workers Section */}
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-semibold mb-4">Project Workers</h3>
-          
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold mb-2">Project Workers</h3>
-            <div className="space-y-4">
-              <div className="flex space-x-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700">Worker Name</label>
-                  <div className="mt-1 flex">
-                    <input
-                      type="text"
-                      value={worker.name}
-                      onChange={(e) => setWorker({ ...worker, name: e.target.value })}
-                      className="flex-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-                      readOnly
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setIsEmployeePopupOpen(true)}
-                      className="ml-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    >
-                      Select Employee
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Role</label>
-                  <input
-                    type="text"
-                    value={worker.role}
-                    onChange={(e) => setWorker(prev => ({ ...prev, role: e.target.value }))}
-                    className="block w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Contact Number</label>
-                  <input
-                    type="tel"
-                    value={worker.contactNumber}
-                    onChange={(e) => setWorker(prev => ({ ...prev, contactNumber: e.target.value }))}
-                    className="block w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
-                  />
-                </div>
-              </div>
+        {/* Section 4: Project Team */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 space-y-6">
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50">
+            <div className="bg-orange-50 p-2.5 rounded-xl">
+              <UsersIcon className="w-6 h-6 text-orange-500" />
             </div>
+            <h3 className="text-xl font-bold text-gray-800">Project Team</h3>
           </div>
-          
-          <button
-            type="button"
-            onClick={handleAddWorker}
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 text-black"
-          >
-            Add Worker
-          </button>
 
-          <div className="mt-4 space-y-2">
-            {projectData.workers.map((w, index) => (
-              <div key={index} className="flex justify-between items-center bg-gray-50 p-3 rounded">
-                <div>
-                  <span className="font-medium">{w.name}</span> - {w.role} ({w.contactNumber})
-                </div>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Employee Name</label>
                 <button
                   type="button"
-                  onClick={() => handleRemoveWorker(index)}
-                  className="text-red-500 hover:text-red-700"
+                  onClick={() => setIsEmployeePopupOpen(true)}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl text-left text-gray-400 font-medium hover:border-indigo-300 transition-colors flex items-center justify-between text-black"
                 >
-                  Remove
+                  {worker.name || 'Select an employee'}
+                  <div className="bg-indigo-600 p-1.5 rounded-lg text-white">
+                    <UsersIcon className="w-4 h-4" />
+                  </div>
                 </button>
               </div>
-            ))}
-          </div>
-        </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Role in Project</label>
+                <input
+                  type="text"
+                  value={worker.role}
+                  onChange={(e) => setWorker(prev => ({ ...prev, role: e.target.value }))}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-black"
+                  placeholder="e.g., Lead Designer"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Contact Number</label>
+                <input
+                  type="tel"
+                  value={worker.contactNumber}
+                  onChange={(e) => setWorker(prev => ({ ...prev, contactNumber: e.target.value }))}
+                  className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-black"
+                  placeholder="+91 98765 43210"
+                />
+              </div>
+            </div>
 
-        {/* Payments Section */}
-        <div className="border-t pt-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Payment Details</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Total Project Amount *
-              </label>
+            <button
+              type="button"
+              onClick={handleAddWorker}
+              className="w-full md:w-auto px-6 py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-100"
+            >
+              <PlusIcon className="w-6 h-6" />
+              Add Team Member
+            </button>
+
+            {projectData.workers.length > 0 && (
+              <div className="space-y-3 mt-6">
+                {projectData.workers.map((w, index) => (
+                  <div key={index} className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl border border-gray-100 group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center font-bold text-indigo-600">
+                        {w.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-800">{w.name}</p>
+                        <p className="text-sm text-gray-400">{w.role} • {w.contactNumber}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveWorker(index)}
+                      className="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                    >
+                      <TrashIcon className="w-6 h-6" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Section 5: Payment Information */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 space-y-6">
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50">
+            <div className="bg-emerald-50 p-2.5 rounded-xl">
+              <CurrencyRupeeIcon className="w-6 h-6 text-emerald-500" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800">Payment Information</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Total Project Amount *</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
                 <input
                   type="text"
                   value={projectData.payments.totalAmount || ''}
@@ -808,75 +651,64 @@ const ProjectUpload: React.FC = () => {
                     const value = e.target.value.replace(/[^0-9]/g, '');
                     handlePaymentChange('totalAmount', value ? Number(value) : 0);
                   }}
-                  className="w-full p-3 pl-8 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
+                  className="w-full p-4 pl-10 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-black"
+                  placeholder="Enter total amount"
                   required
-                  placeholder="Enter amount"
                 />
               </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Advance Amount *
-              </label>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Advance Amount *</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
                 <input
                   type="text"
                   value={projectData.payments.advanceAmount || ''}
                   onChange={(e) => {
                     const value = e.target.value.replace(/[^0-9]/g, '');
-                    const numValue = value ? Number(value) : 0;
-                    if (numValue <= projectData.payments.totalAmount) {
-                      handlePaymentChange('advanceAmount', numValue);
-                    }
+                    handlePaymentChange('advanceAmount', value ? Number(value) : 0);
                   }}
-                  className="w-full p-3 pl-8 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
+                  className="w-full p-4 pl-10 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-black"
+                  placeholder="Enter advance amount"
                   required
-                  placeholder="Enter amount"
                 />
               </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Remaining Amount
-              </label>
-              <div className="bg-gray-100 p-3 rounded-md font-medium">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Remaining Amount</label>
+              <div className="w-full p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-xl font-bold text-indigo-600">
                 ₹{projectData.payments.remainingAmount.toLocaleString()}
               </div>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Payment Status
-              </label>
-              <div className={`p-3 rounded-md font-medium ${
-                projectData.payments.paymentStatus === 'Fully Paid' 
-                  ? 'bg-green-100 text-green-800'
-                  : projectData.payments.paymentStatus === 'Partially Paid'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {projectData.payments.paymentStatus}
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Payment Status</label>
+              <div className={`w-full p-4 rounded-2xl font-bold text-center border flex items-center justify-center gap-2 ${projectData.payments.paymentStatus === 'Fully Paid'
+                ? 'bg-green-50 border-green-100 text-green-600'
+                : 'bg-red-50 border-red-100 text-red-600'
+                }`}>
+                <span className={`w-2 h-2 rounded-full ${projectData.payments.paymentStatus === 'Fully Paid' ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`} />
+                {projectData.payments.paymentStatus.toUpperCase()}
               </div>
             </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Next Payment Date
-              </label>
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-sm font-bold text-gray-500 uppercase tracking-wider">Next Payment Date</label>
               <input
                 type="date"
                 value={projectData.payments.nextPaymentDate}
                 onChange={(e) => handlePaymentChange('nextPaymentDate', e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-black"
+                className="w-full p-4 bg-gray-50 border border-gray-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none text-black"
                 min={new Date().toISOString().split('T')[0]}
               />
             </div>
           </div>
-        </div>
+        </motion.div>
 
+        <CustomerSearchPopup
+          customers={customers}
+          isOpen={isCustomerPopupOpen}
+          onClose={() => setIsCustomerPopupOpen(false)}
+          onSelect={(customer) => handleCustomerSelect(customer.id)}
+        />
         <EmployeeSearchPopup
           employees={employees}
           isOpen={isEmployeePopupOpen}
@@ -884,15 +716,21 @@ const ProjectUpload: React.FC = () => {
           onSelect={handleEmployeeSelect}
         />
 
-        <div className="flex justify-end">
+        {/* Submit Button */}
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="pt-6">
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:opacity-50 text-black"
+            className="w-full py-5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white text-xl font-bold rounded-3xl shadow-2xl hover:shadow-indigo-200 transition-all flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-50"
           >
-            {loading ? 'Uploading...' : 'Submit Project'}
+            {loading ? (
+              <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <BriefcaseIcon className="w-6 h-6" />
+            )}
+            {loading ? 'Creating Project...' : 'Create Project'}
           </button>
-        </div>
+        </motion.div>
       </form>
     </div>
   );

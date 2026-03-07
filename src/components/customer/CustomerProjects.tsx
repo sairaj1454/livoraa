@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { auth, db } from '../../config/firebase';
 import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
 import { toast } from 'react-toastify';
+import { motion } from 'framer-motion';
 
 interface PaymentHistory {
   amount: number;
@@ -46,15 +47,15 @@ const CustomerProjects: React.FC = () => {
         collection(db, 'projects'),
         where('clientEmail', '==', user.email)
       );
-      
+
       const querySnapshot = await getDocs(projectsQuery);
       const projectsList: Project[] = [];
-      
+
       for (const docRef of querySnapshot.docs) {
         const data = docRef.data();
         const projectRef = doc(db, 'projects', docRef.id);
         const projectDoc = await getDoc(projectRef);
-        
+
         if (projectDoc.exists()) {
           const projectData = projectDoc.data();
           projectsList.push({
@@ -109,125 +110,138 @@ const CustomerProjects: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      ) : projects.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">No projects found</p>
-        </div>
-      ) : (
-        projects.map((project) => (
-          <div key={project.id} className="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">{project.title}</h2>
-                <div className="flex gap-2">
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                    View Details
-                  </button>
+    <div className="space-y-12 p-2">
+      {projects.map((project, idx) => (
+        <motion.div
+          key={project.id}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: idx * 0.1 }}
+          className="bg-white rounded-[32px] overflow-hidden"
+        >
+          {/* Project Header */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-8 border-b border-gray-50">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">{project.title}</h2>
+              <p className="text-sm text-gray-400 font-medium uppercase tracking-widest">Ongoing Project</p>
+            </div>
+            <button className="mt-4 md:mt-0 px-8 py-3 bg-[#A78B6A] text-white rounded-2xl font-bold shadow-lg shadow-[#A78B6A]/20 hover:bg-[#8d7456] transition-all flex items-center gap-2">
+              View Details
+            </button>
+          </div>
+
+          <div className="p-8 space-y-10">
+            {/* Payment Overview */}
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-[0.2em] mb-6">Payment Overview</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Advance Card */}
+                <div className="bg-blue-50/50 p-6 rounded-[24px] border border-blue-100 flex flex-col justify-between h-32 relative overflow-hidden group">
+                  <div className="relative z-10">
+                    <p className="text-blue-600/70 text-xs font-bold uppercase tracking-wider mb-1">Initial Advance</p>
+                    <p className="text-3xl font-bold text-blue-600 tracking-tight">₹{project.payments.advanceAmount.toLocaleString()}</p>
+                  </div>
+                  <p className="text-[11px] font-bold text-blue-400 uppercase tracking-wide relative z-10">
+                    {getPercentage(project.payments.advanceAmount, project.payments.totalAmount)}% of total
+                  </p>
+                  <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-blue-100/30 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+                </div>
+
+                {/* Paid Card */}
+                <div className="bg-green-50/50 p-6 rounded-[24px] border border-green-100 flex flex-col justify-between h-32 relative overflow-hidden group">
+                  <div className="relative z-10">
+                    <p className="text-green-600/70 text-xs font-bold uppercase tracking-wider mb-1">Total Paid</p>
+                    <p className="text-3xl font-bold text-green-600 tracking-tight">₹{calculateTotalPaid(project).toLocaleString()}</p>
+                  </div>
+                  <p className="text-[11px] font-bold text-green-400 uppercase tracking-wide relative z-10">
+                    {getPercentage(calculateTotalPaid(project), project.payments.totalAmount)}% of total
+                  </p>
+                  <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-green-100/30 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
+                </div>
+
+                {/* Remaining Card */}
+                <div className="bg-red-50/50 p-6 rounded-[24px] border border-red-100 flex flex-col justify-between h-32 relative overflow-hidden group">
+                  <div className="relative z-10">
+                    <p className="text-red-600/70 text-xs font-bold uppercase tracking-wider mb-1">Remaining Amount</p>
+                    <p className="text-3xl font-bold text-red-600 tracking-tight">₹{calculateRemainingAmount(project).toLocaleString()}</p>
+                  </div>
+                  <p className="text-[11px] font-bold text-red-400 uppercase tracking-wide relative z-10">
+                    {getPercentage(calculateRemainingAmount(project), project.payments.totalAmount)}% remaining
+                  </p>
+                  <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-red-100/30 rounded-full group-hover:scale-150 transition-transform duration-500"></div>
                 </div>
               </div>
+            </div>
 
-              <div className="mb-8">
-                <h3 className="text-xl font-semibold mb-4">Payment Overview</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-gray-600">Initial Advance</p>
-                    <p className="text-2xl font-bold text-blue-600">₹{project.payments.advanceAmount.toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">
-                      {getPercentage(project.payments.advanceAmount, project.payments.totalAmount)}% of total
-                    </p>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <p className="text-gray-600">Total Paid</p>
-                    <p className="text-2xl font-bold text-green-600">₹{calculateTotalPaid(project).toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">
-                      {getPercentage(calculateTotalPaid(project), project.payments.totalAmount)}% of total
-                    </p>
-                  </div>
-                  <div className="bg-red-50 p-4 rounded-lg">
-                    <p className="text-gray-600">Remaining Amount</p>
-                    <p className="text-2xl font-bold text-red-600">₹{calculateRemainingAmount(project).toLocaleString()}</p>
-                    <p className="text-sm text-gray-500">
-                      {getPercentage(calculateRemainingAmount(project), project.payments.totalAmount)}% remaining
-                    </p>
-                  </div>
+            {/* Next Payment Info */}
+            {project.payments.nextPaymentDate && (
+              <div className="bg-gray-50/50 rounded-2xl p-6 border border-gray-100 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Next Payment Date</p>
+                  <h4 className="text-xl font-bold text-gray-900">{formatDate(project.payments.nextPaymentDate)}</h4>
                 </div>
+                <span className="px-4 py-2 bg-[#A78B6A]/10 text-[#A78B6A] rounded-full text-[10px] font-black uppercase tracking-widest border border-[#A78B6A]/20">
+                  Due Soon
+                </span>
               </div>
+            )}
 
-              {project.payments.nextPaymentDate && (
-                <div className="mb-6">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="text-gray-600">Next Payment Date:</p>
-                      <p className="text-lg font-semibold">{formatDate(project.payments.nextPaymentDate)}</p>
-                    </div>
-                    <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-medium">
-                      DUE SOON
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <h3 className="text-xl font-semibold mb-4">Payment History</h3>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Date
+            {/* Payment History */}
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-[0.2em] mb-6">Payment History</h3>
+              <div className="bg-white border border-gray-100 rounded-[24px] overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50/80 border-b border-gray-100">
+                      {['Date', 'Amount', 'Type', 'Method', 'Status'].map(head => (
+                        <th key={head} className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                          {head}
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Amount
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Type
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Method
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {project.payments.paymentHistory.map((payment, index) => (
-                        <tr key={index}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatDate(payment.date)}
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {project.payments.paymentHistory.length > 0 ? (
+                      project.payments.paymentHistory.map((payment, pIdx) => (
+                        <tr key={pIdx} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-6 py-5 text-sm font-bold text-gray-900">{formatDate(payment.date)}</td>
+                          <td className="px-6 py-5 text-sm font-black text-gray-900">₹{payment.amount.toLocaleString()}</td>
+                          <td className="px-6 py-5">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                              {payment.type}
+                            </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            ₹{payment.amount.toLocaleString()}
+                          <td className="px-6 py-5">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-[#A78B6A]">
+                              {payment.paymentMethod}
+                            </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {payment.type}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {payment.paymentMethod}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full
-                              ${payment.status === 'success' ? 'bg-green-100 text-green-800' : 
-                                payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
-                                'bg-red-100 text-red-800'}`}>
+                          <td className="px-6 py-5">
+                            <span className={`
+                              px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest
+                              ${payment.status === 'success' ? 'bg-green-100 text-green-600' :
+                                payment.status === 'pending' ? 'bg-amber-100 text-amber-600' :
+                                  'bg-red-100 text-red-600'}
+                            `}>
                               {payment.status}
                             </span>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-400 font-medium italic">
+                          No payment records found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
-        ))
-      )}
+        </motion.div>
+      ))}
     </div>
   );
 };

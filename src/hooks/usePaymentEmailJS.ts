@@ -28,7 +28,7 @@ export const usePaymentEmailJS = () => {
         to_name: toName,
         message: `
 ===========================================
-            VIRTUOUS INTERIORS
+            LIVORAA ATELIER
            Payment Receipt
 ===========================================
 
@@ -62,8 +62,8 @@ Note: This is a computer-generated receipt.
 No signature required.
 
 For any queries, please contact:
-Virtuous Interiors
-Email: support@virtuousinteriors.com
+LIVORAA ATELIER
+Email: support@LIVORAA ATELIER.com
 Phone: +91-XXXXXXXXXX
 
 ===========================================

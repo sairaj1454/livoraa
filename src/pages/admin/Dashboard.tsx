@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../config/firebase';
 import { useNavigate } from 'react-router-dom';
@@ -17,7 +18,8 @@ import EmployeeManager from '../../components/EmployeeManager';
 import Settings from '../../components/Settings';
 import QuotationGenerator from '../../components/QuotationGenerator';
 import ReceiptGenerator from '../../components/ReceiptGenerator';
-
+import PersonalizedRequestsManager from '../../components/PersonalizedRequestsManager';
+import ClientEnquiriesManager from '../../components/ClientEnquiriesManager';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import {
   HomeIcon,
@@ -35,7 +37,9 @@ import {
   DocumentTextIcon,
   ReceiptRefundIcon,
   UserPlusIcon,
-  ChatBubbleLeftIcon
+  ChatBubbleLeftIcon,
+  ChatBubbleLeftRightIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline';
 
 const Dashboard = () => {
@@ -59,16 +63,27 @@ const Dashboard = () => {
     { id: 'project-overview', name: 'Project Overview', icon: ChartBarIcon },
     { id: 'gallery', name: 'Gallery', icon: PhotoIcon },
     { id: 'enquiries', name: 'Enquiries', icon: EnvelopeIcon },
+    { id: 'personalized-requests', name: 'Personalized Requests', icon: SparklesIcon },
+    { id: 'client-enquiries', name: 'Client Enquiries', icon: ChatBubbleLeftRightIcon },
     { id: 'create-customer', name: 'Create Customer', icon: UserPlusIcon },
     { id: 'customers', name: 'Customer Database', icon: UserGroupIcon },
     { id: 'employees', name: 'Employees', icon: UsersIcon },
     { id: 'blog', name: 'Blog', icon: NewspaperIcon },
     { id: 'testimonials', name: 'Testimonials', icon: ChatBubbleLeftIcon },
     { id: 'quotation', name: 'Generate Quotation', icon: DocumentTextIcon },
-  
+
     { id: 'receipt', name: 'Generate Receipt', icon: ReceiptRefundIcon },
+    { id: 'customer-login-link', name: 'Customer Login', icon: UsersIcon },
     { id: 'settings', name: 'Settings', icon: Cog6ToothIcon },
   ];
+
+  const handleNavClick = (id: string) => {
+    if (id === 'customer-login-link') {
+      window.open('/customer/login', '_blank');
+      return;
+    }
+    setActiveTab(id);
+  };
 
   const stats = [
     { name: 'Total Projects', value: data.totalProjects.toString(), icon: BriefcaseIcon },
@@ -142,60 +157,88 @@ const Dashboard = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
-          <div className="p-6">
-            <div className="mb-8">
-              <h2 className="text-2xl font-semibold text-gray-900">Welcome back, Admin</h2>
-              <p className="mt-1 text-sm text-gray-600">Here's what's happening today.</p>
-            </div>
+          <div className="p-4 md:p-8 space-y-8">
+            {/* Gradient Welcome Banner */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="relative overflow-hidden bg-gradient-to-r from-[#4E67E8] via-[#8B5CF6] to-[#D946EF] rounded-3xl p-8 md:p-12 shadow-2xl"
+            >
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="text-white">
+                  <h2 className="text-4xl md:text-5xl font-bold mb-2">Welcome back, Admin</h2>
+                  <p className="text-indigo-100 text-lg opacity-90">Here's your LIVORAA ATELIER dashboard overview</p>
+                </div>
+                <div className="bg-white/20 p-5 rounded-3xl backdrop-blur-md">
+                  <HomeIcon className="w-12 h-12 text-white" />
+                </div>
+              </div>
+              <div className="absolute top-0 right-0 -transtale-y-1/2 translate-x-1/2 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+            </motion.div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-              {stats.map((stat) => (
-                <div
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[
+                { name: 'TOTAL PROJECTS', value: data.totalProjects, icon: BriefcaseIcon, color: 'border-blue-500', iconBg: 'bg-blue-50', iconColor: 'text-blue-500' },
+                { name: 'ACTIVE PROJECTS', value: data.totalInProgressProjects, icon: ChartBarIcon, color: 'border-purple-500', iconBg: 'bg-purple-50', iconColor: 'text-purple-500' },
+                { name: 'TEAM MEMBERS', value: data.teamMembers, icon: UsersIcon, color: 'border-green-500', iconBg: 'bg-green-50', iconColor: 'text-green-500' },
+                { name: 'BLOG POSTS', value: data.totalBlogs, icon: NewspaperIcon, color: 'border-orange-500', iconBg: 'bg-orange-50', iconColor: 'text-orange-500' },
+              ].map((stat, index) => (
+                <motion.div
                   key={stat.name}
-                  className="bg-white overflow-hidden shadow rounded-lg transition-all hover:shadow-lg"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className={`bg-white rounded-2xl p-6 shadow-sm border-t-4 ${stat.color} flex items-center justify-between hover:shadow-md transition-all`}
                 >
-                  <div className="p-5">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                          <span className="text-indigo-600 text-xl font-semibold">{stat.value}</span>
-                        </div>
-                      </div>
-                      <div className="ml-5">
-                        <p className="text-sm font-medium text-gray-500 truncate">{stat.name}</p>
-                      </div>
-                    </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">{stat.name}</p>
+                    <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
                   </div>
-                </div>
+                  <div className={`${stat.iconBg} p-4 rounded-2xl`}>
+                    <stat.icon className={`w-8 h-8 ${stat.iconColor}`} />
+                  </div>
+                </motion.div>
               ))}
             </div>
 
-            {/* Recent Projects */}
-            <div className="bg-white shadow rounded-lg overflow-hidden">
-              <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-                <h3 className="text-lg leading-6 font-medium text-gray-900">Recent Projects</h3>
+            {/* Recent Projects Section */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden"
+            >
+              <div className="p-6 border-b border-gray-50 bg-gray-50/30 flex items-center gap-3">
+                <div className="bg-blue-50 p-2 rounded-xl">
+                  <BriefcaseIcon className="w-6 h-6 text-blue-500" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800">Recent Projects</h3>
               </div>
-              <div className="divide-y divide-gray-200">
-                {recentProjects.map((project, index) => (
-                  <div key={index} className="px-4 py-4 sm:px-6 hover:bg-gray-50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col sm:flex-row sm:items-center">
-                        <p className="text-sm font-medium text-indigo-600 truncate">{project.name}</p>
-                        <p className="mt-1 sm:mt-0 sm:ml-6 text-sm text-gray-500">Due {project.date}</p>
+              <div className="divide-y divide-gray-50">
+                {data.recentProjects.slice(0, 5).map((project, index) => (
+                  <div key={index} className="px-6 py-5 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-indigo-500 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-100">
+                        {project.title.charAt(0)}
                       </div>
-                      <div className="ml-2 flex-shrink-0">
-                        <span
-                          className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(project.status)}`}
-                        >
-                          {project.status}
-                        </span>
+                      <div>
+                        <h4 className="text-lg font-bold text-gray-800">{project.title}</h4>
+                        <p className="text-sm text-gray-400 flex items-center gap-1.5 mt-0.5">
+                          <DocumentTextIcon className="w-4 h-4" />
+                          Due {formatDate(project.dueDate)}
+                        </p>
                       </div>
+                    </div>
+                    <div>
+                      <span className="bg-green-100 text-green-600 px-4 py-1.5 rounded-xl text-sm font-bold flex items-center gap-2 border border-green-200">
+                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        Completed
+                      </span>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
+            </motion.div>
           </div>
         );
       case 'projects':
@@ -211,6 +254,10 @@ const Dashboard = () => {
         );
       case 'enquiries':
         return <EnquiriesManager />;
+      case 'personalized-requests':
+        return <PersonalizedRequestsManager />;
+      case 'client-enquiries':
+        return <ClientEnquiriesManager />;
       case 'create-customer':
         return <CustomerCreation />;
       case 'customers':
@@ -228,7 +275,7 @@ const Dashboard = () => {
         return <TestimonialManager />;
       case 'quotation':
         return <QuotationGenerator />;
-      
+
       case 'receipt':
         return <ReceiptGenerator />;
       case 'settings':
@@ -254,7 +301,7 @@ const Dashboard = () => {
                 <Bars3Icon className="h-6 w-6" aria-hidden="true" />
               )}
             </button>
-            <h1 className="ml-3 text-lg font-bold text-indigo-600">Virtuous Interiors</h1>
+            <h1 className="ml-3 text-lg font-bold text-indigo-600">LIVORAA ATELIER</h1>
           </div>
           <button
             onClick={handleSignOut}
@@ -267,23 +314,20 @@ const Dashboard = () => {
 
       {/* Mobile sidebar */}
       <div
-        className={`fixed inset-0 z-50 lg:hidden transition-all duration-300 ease-in-out ${
-          isMobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
+        className={`fixed inset-0 z-50 lg:hidden transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
       >
         {/* Backdrop */}
         <div
-          className={`absolute inset-0 bg-gray-600 bg-opacity-75 transition-opacity ${
-            isMobileMenuOpen ? 'opacity-100' : 'opacity-0'
-          }`}
+          className={`absolute inset-0 bg-gray-600 bg-opacity-75 transition-opacity ${isMobileMenuOpen ? 'opacity-100' : 'opacity-0'
+            }`}
           onClick={() => setIsMobileMenuOpen(false)}
         />
 
         {/* Sidebar */}
         <div
-          className={`absolute inset-y-0 left-0 max-w-xs w-full bg-white shadow-xl transform transition-transform ease-in-out duration-300 ${
-            isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+          className={`absolute inset-y-0 left-0 max-w-xs w-full bg-white shadow-xl transform transition-transform ease-in-out duration-300 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
         >
           {/* Close button */}
           <div className="absolute top-0 right-0 pt-4 pr-4">
@@ -298,7 +342,7 @@ const Dashboard = () => {
           <div className="h-full flex flex-col">
             {/* Mobile menu header */}
             <div className="px-4 py-3 border-b border-gray-200">
-              <h1 className="text-lg font-bold text-indigo-600">Virtuous Interiors</h1>
+              <h1 className="text-lg font-bold text-indigo-600">LIVORAA ATELIER</h1>
             </div>
 
             {/* Navigation items */}
@@ -307,19 +351,17 @@ const Dashboard = () => {
                 <button
                   key={item.id}
                   onClick={() => {
-                    setActiveTab(item.id);
+                    handleNavClick(item.id);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`flex items-center w-full px-3 py-3 text-base font-medium rounded-lg transition-colors ${
-                    activeTab === item.id
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-gray-900 hover:bg-indigo-50 hover:text-indigo-600'
-                  }`}
+                  className={`flex items-center w-full px-3 py-3 text-base font-medium rounded-lg transition-colors ${activeTab === item.id
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-gray-900 hover:bg-indigo-50 hover:text-indigo-600'
+                    }`}
                 >
                   <item.icon
-                    className={`mr-4 h-6 w-6 flex-shrink-0 ${
-                      activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'
-                    }`}
+                    className={`mr-4 h-6 w-6 flex-shrink-0 ${activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'
+                      }`}
                   />
                   {item.name}
                 </button>
@@ -334,24 +376,22 @@ const Dashboard = () => {
         <div className="flex flex-col w-64">
           <div className="flex flex-col h-0 flex-1">
             <div className="flex items-center h-16 flex-shrink-0 px-4 bg-white border-b border-gray-200">
-              <h1 className="text-xl font-bold text-indigo-600">Virtuous Interiors</h1>
+              <h1 className="text-xl font-bold text-indigo-600">LIVORAA ATELIER</h1>
             </div>
             <div className="flex-1 flex flex-col overflow-y-auto">
               <nav className="flex-1 px-2 py-4 bg-white space-y-1">
                 {navigationItems.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md w-full ${
-                      activeTab === item.id
-                        ? 'bg-indigo-600 text-white'
-                        : 'text-gray-600 hover:bg-indigo-50 hover:text-indigo-600'
-                    }`}
+                    onClick={() => handleNavClick(item.id)}
+                    className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md w-full ${activeTab === item.id
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-gray-600 hover:bg-indigo-50 hover:text-indigo-600'
+                      }`}
                   >
                     <item.icon
-                      className={`mr-3 flex-shrink-0 h-6 w-6 ${
-                        activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'
-                      }`}
+                      className={`mr-3 flex-shrink-0 h-6 w-6 ${activeTab === item.id ? 'text-white' : 'text-gray-400 group-hover:text-indigo-600'
+                        }`}
                     />
                     {item.name}
                   </button>

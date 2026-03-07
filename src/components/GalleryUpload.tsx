@@ -2,13 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { db, auth } from '../config/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { toast, ToastContainer } from 'react-toastify';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  PlusIcon,
+  PhotoIcon,
+  LinkIcon,
+  CubeIcon,
+  PaintBrushIcon,
+  ChevronDownIcon,
+  SparklesIcon,
+  XMarkIcon
+} from '@heroicons/react/24/outline';
 import 'react-toastify/dist/ReactToastify.css';
+import { uploadFile } from '../config/imagekit';
 
 interface GalleryItem {
   title: string;
   description: string;
   dimensions: string;
-  category: 'Bedrooms' | 'Living Rooms' | 'Dining Rooms' | 'Kitchen';
+  category: string;
   style: string;
 }
 
@@ -19,15 +31,15 @@ const predefinedOptions = {
     'Classic Elegant Interior',
     'Urban Chic Room',
     'Rustic Comfort Design',
-    'Custom...'
   ],
-  descriptions: [
-    'A perfect blend of functionality and style',
-    'Luxurious space with premium finishes',
-    'Elegant design with timeless appeal',
-    'Modern urban living at its finest',
-    'Warm and inviting space with natural elements',
-    'Custom...'
+  categories: [
+    'Bedrooms',
+    'Living Rooms',
+    'Kitchen',
+    'Washroom',
+    'Custom Made',
+    'Dining Rooms',
+    'Other'
   ],
   dimensions: [
     '10x12 ft',
@@ -35,7 +47,6 @@ const predefinedOptions = {
     '15x20 ft',
     '20x25 ft',
     '25x30 ft',
-    'Custom...'
   ],
   styles: [
     'Modern',
@@ -46,13 +57,12 @@ const predefinedOptions = {
     'Scandinavian',
     'Bohemian',
     'Rustic',
-    'Custom...'
   ]
 };
 
 const GalleryUpload: React.FC = () => {
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string>('');
+  const [files, setFiles] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [imageUrl, setImageUrl] = useState<string>('');
   const [uploading, setUploading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -64,22 +74,14 @@ const GalleryUpload: React.FC = () => {
     category: 'Bedrooms',
     style: ''
   });
+  const [customTitle, setCustomTitle] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
   const [uploadType, setUploadType] = useState<'file' | 'url'>('file');
-  const [customFields, setCustomFields] = useState({
-    title: false,
-    description: false,
-    dimensions: false,
-    style: false
-  });
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user);
-      if (!user) {
-        setError('Please log in to upload images');
-      }
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -93,45 +95,30 @@ const GalleryUpload: React.FC = () => {
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const selectedFile = event.target.files[0];
-      
-      if (selectedFile.size > 1024 * 1024) {
-        setError('File size must be less than 1MB');
+    if (event.target.files && event.target.files.length > 0) {
+      const selectedFiles = Array.from(event.target.files);
+      const oversized = selectedFiles.some(f => f.size > 2 * 1024 * 1024);
+      if (oversized) {
+        toast.error('Some files are larger than 2MB. Please optimize your images.');
         return;
       }
 
-      setFile(selectedFile);
+      setFiles(prev => [...prev, ...selectedFiles]);
       try {
-        const base64 = await convertToBase64(selectedFile);
-        setPreview(base64);
+        const base64Promises = selectedFiles.map(f => convertToBase64(f));
+        const base64s = await Promise.all(base64Promises);
+        setPreviews(prev => [...prev, ...base64s]);
         setError('');
       } catch (err) {
-        setError('Error processing image');
-        console.error(err);
+        toast.error('Error processing images');
       }
     }
   };
 
-  const handleUrlChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const url = event.target.value;
-    setImageUrl(url);
-    if (url) {
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Invalid image URL');
-        const blob = await response.blob();
-        if (!blob.type.startsWith('image/')) {
-          throw new Error('URL does not point to a valid image');
-        }
-        const base64 = await convertToBase64(new File([blob], 'url-image', { type: blob.type }));
-        setPreview(base64);
-        setError('');
-      } catch (err) {
-        setError('Error loading image from URL');
-        setPreview('');
-        console.error(err);
-      }
+  const handleUrlAdd = () => {
+    if (imageUrl) {
+      setPreviews(prev => [...prev, imageUrl]);
+      setImageUrl('');
     }
   };
 
@@ -143,227 +130,313 @@ const GalleryUpload: React.FC = () => {
     }));
   };
 
-  const handlePredefinedSelect = (field: keyof GalleryItem, value: string) => {
-    if (value === 'Custom...') {
-      setCustomFields(prev => ({ ...prev, [field]: true }));
-      setGalleryData(prev => ({ ...prev, [field]: '' }));
-    } else {
-      setCustomFields(prev => ({ ...prev, [field]: false }));
-      setGalleryData(prev => ({ ...prev, [field]: value }));
-    }
-  };
-
-  const resetForm = () => {
-    setPreview('');
-    setFile(null);
-    setImageUrl('');
-    setGalleryData({
-      title: '',
-      description: '',
-      dimensions: '',
-      category: 'Bedrooms',
-      style: ''
-    });
-    setCustomFields({
-      title: false,
-      description: false,
-      dimensions: false,
-      style: false
-    });
+  const removePreview = (index: number) => {
+    setPreviews(prev => prev.filter((_, i) => i !== index));
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleUpload = async () => {
     if (!user) {
-      setError('Please log in to upload images');
+      toast.error('Please log in to upload images');
       return;
     }
 
-    if ((!file && !imageUrl) || !preview) {
-      setError('Please select a file or enter an image URL');
+    if (previews.length === 0) {
+      toast.error('Please select at least one image');
       return;
     }
 
-    if (!galleryData.title || !galleryData.description) {
-      setError('Please fill in all required fields');
+    if (!galleryData.title || !galleryData.category) {
+      toast.error('Project Title and Category are required');
       return;
     }
 
     setUploading(true);
-    setError('');
-
     try {
-      const docRef = await addDoc(collection(db, 'gallery'), {
+      const uploadTargets = uploadType === 'file' ? files : previews;
+      const uploadPromises = uploadTargets.map((target, idx) => {
+        const safeTitle = galleryData.title.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_') || 'image';
+        return uploadFile(target, `${safeTitle}_${Date.now()}_${idx}.jpg`, "gallery");
+      });
+
+      const uploadResults = await Promise.all(uploadPromises) as any[];
+      const imageUrls = uploadResults.map(res => res.url);
+
+      const finalData = {
         ...galleryData,
-        imageData: preview,
-        fileName: file ? file.name : 'url-image',
+        title: galleryData.title === 'custom' ? customTitle : galleryData.title,
+        category: galleryData.category === 'Other' ? customCategory : galleryData.category,
+        imageData: imageUrls[0], // Main thumbnail
+        images: imageUrls, // All images for the collection
         uploadedAt: serverTimestamp(),
         userId: user.uid,
-        type: 'image'
-      });
+        type: 'collection'
+      };
 
-      toast.success('Image uploaded successfully!', {
-        position: "top-right",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+      await addDoc(collection(db, 'gallery'), finalData);
 
-      resetForm();
+      toast.success(`Success! Collection published with ${imageUrls.length} images.`);
+
+      setPreviews([]);
+      setFiles([]);
+      setGalleryData({
+        title: '',
+        description: '',
+        dimensions: '',
+        category: 'Bedrooms',
+        style: ''
+      });
+      setCustomTitle('');
+      setCustomCategory('');
     } catch (err) {
       console.error('Error uploading:', err);
-      setError('Failed to upload image. Please try again.');
-      toast.error('Failed to upload image', {
-        position: "top-right",
-        autoClose: 3000,
-      });
+      toast.error('Failed to publish collection');
     } finally {
       setUploading(false);
     }
   };
 
-  if (!user) {
-    return (
-      <div className="p-6 bg-white rounded-lg shadow-md">
-        <p className="text-red-500">Please log in to upload images</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Upload to Gallery</h2>
-      <ToastContainer position="bottom-right" />
+    <div className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden mb-12">
+      <div className="p-8 md:p-12">
+        <h2 className="text-4xl font-black text-gray-800 mb-12 tracking-tight">Create Gallery Collection</h2>
 
-      {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-          {error}
-        </div>
-      )}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+          {/* Left Side: Upload Section */}
+          <div className="space-y-10">
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4 block">
+                Upload Method
+              </label>
+              <div className="flex p-1.5 bg-[#F8F9FA] rounded-2xl w-fit">
+                <button
+                  onClick={() => setUploadType('file')}
+                  className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all ${uploadType === 'file'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                >
+                  Local Files
+                </button>
+                <button
+                  onClick={() => setUploadType('url')}
+                  className={`px-8 py-2.5 rounded-xl text-sm font-bold transition-all ${uploadType === 'url'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                >
+                  Image URL
+                </button>
+              </div>
+            </div>
 
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Upload Type</label>
-        <div className="flex space-x-4">
-          <button
-            onClick={() => setUploadType('file')}
-            className={`px-4 py-2 rounded-md ${
-              uploadType === 'file'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Upload File
-          </button>
-          <button
-            onClick={() => setUploadType('url')}
-            className={`px-4 py-2 rounded-md ${
-              uploadType === 'url'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            Image URL
-          </button>
-        </div>
-      </div>
+            <AnimatePresence mode="wait">
+              {uploadType === 'file' ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  key="file-upload"
+                >
+                  <label className="group cursor-pointer block">
+                    <div className="w-full h-56 border-2 border-dashed border-gray-100 rounded-[2rem] flex flex-col items-center justify-center gap-4 bg-gray-50/50 group-hover:bg-indigo-50/50 group-hover:border-indigo-200 transition-all">
+                      <div className="w-14 h-14 bg-white shadow-sm rounded-full flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                        <PlusIcon className="w-6 h-6" />
+                      </div>
+                      <p className="text-sm font-bold text-gray-500">Pick Images (Max 2MB/each)</p>
+                    </div>
+                    <input type="file" multiple accept="image/*" onChange={handleFileChange} className="hidden" />
+                  </label>
+                </motion.div>
+              ) : (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  key="url-upload"
+                  className="space-y-4"
+                >
+                  <div className="relative">
+                    <input
+                      type="url"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder="Paste your image URL here..."
+                      className="w-full pl-12 pr-4 py-5 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-100 font-bold text-gray-700 placeholder:text-gray-300 shadow-inner"
+                    />
+                    <LinkIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-300" />
+                  </div>
+                  <button
+                    onClick={handleUrlAdd}
+                    className="w-full py-4 bg-indigo-50 text-indigo-600 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-100 transition-colors"
+                  >
+                    Add to Collection
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-      {uploadType === 'file' ? (
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Choose Image (Max 1MB)
-          </label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="block w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-          />
-        </div>
-      ) : (
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Image URL
-          </label>
-          <input
-            type="url"
-            value={imageUrl}
-            onChange={handleUrlChange}
-            placeholder="Enter image URL"
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-gray-700"
-          />
-        </div>
-      )}
+            {previews.length > 0 && (
+              <div className="space-y-6 pt-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-black text-gray-300 uppercase tracking-widest">
+                    Selected Assets ({previews.length})
+                  </h3>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  {previews.map((prev, i) => (
+                    <motion.div
+                      layout
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      key={i}
+                      className="aspect-square rounded-2xl overflow-hidden relative group shadow-sm shadow-gray-100"
+                    >
+                      <img src={prev} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <button
+                          onClick={() => removePreview(i)}
+                          className="bg-white/20 backdrop-blur-md p-2 rounded-full text-white hover:bg-rose-500 transition-colors shadow-lg"
+                        >
+                          <XMarkIcon className="w-5 h-5" />
+                        </button>
+                      </div>
+                      {i === 0 && (
+                        <div className="absolute top-2 left-2 bg-indigo-600 text-white text-[8px] font-black px-2 py-1 rounded-lg uppercase tracking-wider shadow-lg">
+                          Cover
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
-      {preview && (
-        <div className="mb-6">
-          <h3 className="text-lg font-medium text-gray-700 mb-2">Preview</h3>
-          <div className="relative aspect-video w-full max-w-2xl mx-auto">
-            <img
-              src={preview}
-              alt="Preview"
-              className="rounded-lg object-contain w-full h-full"
-            />
+          {/* Right Side: Form Details */}
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 gap-8">
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Project Title</label>
+                <div className="relative">
+                  <select
+                    name="title"
+                    value={galleryData.title}
+                    onChange={handleInputChange}
+                    className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-100 font-bold text-gray-700 appearance-none shadow-inner"
+                  >
+                    <option value="">Select a title</option>
+                    {predefinedOptions.titles.map(t => <option key={t} value={t}>{t}</option>)}
+                    <option value="custom">Add Custom Title...</option>
+                  </select>
+                  <ChevronDownIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+
+              {galleryData.title === 'custom' && (
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Custom Project Title</label>
+                  <input
+                    type="text"
+                    value={customTitle}
+                    onChange={(e) => setCustomTitle(e.target.value)}
+                    placeholder="Enter your custom title..."
+                    className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-100 font-bold text-gray-700 shadow-inner"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Category</label>
+                <div className="relative">
+                  <select
+                    name="category"
+                    value={galleryData.category}
+                    onChange={handleInputChange}
+                    className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-100 font-bold text-gray-700 appearance-none shadow-inner"
+                  >
+                    {predefinedOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <ChevronDownIcon className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                </div>
+
+                {galleryData.category === 'Other' && (
+                  <div className="space-y-3 pt-4">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Custom Category Name</label>
+                    <input
+                      type="text"
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      placeholder="Enter your custom category..."
+                      className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-100 font-bold text-gray-700 shadow-inner"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Dimensions & Style</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="relative">
+                    <select
+                      name="dimensions"
+                      value={galleryData.dimensions}
+                      onChange={handleInputChange}
+                      className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-100 font-bold text-gray-700 appearance-none shadow-inner text-sm"
+                    >
+                      <option value="">Dimensions</option>
+                      {predefinedOptions.dimensions.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                    <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                  <div className="relative">
+                    <select
+                      name="style"
+                      value={galleryData.style}
+                      onChange={handleInputChange}
+                      className="w-full p-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-100 font-bold text-gray-700 appearance-none shadow-inner text-sm"
+                    >
+                      <option value="">Style</option>
+                      {predefinedOptions.styles.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <PaintBrushIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Project Description</label>
+                <textarea
+                  name="description"
+                  value={galleryData.description}
+                  onChange={handleInputChange}
+                  placeholder="Describe the collection's details and finishes..."
+                  className="w-full p-5 h-44 bg-gray-50 border-none rounded-3xl focus:ring-2 focus:ring-indigo-100 font-bold text-gray-700 placeholder:text-gray-300 shadow-inner resize-none"
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleUpload}
+              disabled={uploading}
+              className="w-full bg-indigo-600 text-white py-6 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 disabled:opacity-50 flex items-center justify-center gap-4"
+            >
+              {uploading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                <>
+                  <SparklesIcon className="w-5 h-5" />
+                  PUBLISH COLLECTION ({previews.length})
+                </>
+              )}
+            </button>
           </div>
         </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Title *
-          </label>
-          {!customFields.title ? (
-            <select
-              value={galleryData.title}
-              onChange={(e) => handlePredefinedSelect('title', e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-gray-700"
-            >
-              <option value="">Select a title</option>
-              {predefinedOptions.titles.map((title) => (
-                <option key={title} value={title}>
-                  {title}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="text"
-              name="title"
-              value={galleryData.title}
-              onChange={handleInputChange}
-              placeholder="Enter custom title"
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-gray-700"
-            />
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Category *
-          </label>
-          <select
-            name="category"
-            value={galleryData.category}
-            onChange={handleInputChange}
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 text-gray-700"
-          >
-            <option value="Bedrooms">Bedrooms</option>
-            <option value="Living Rooms">Living Rooms</option>
-            <option value="Dining Rooms">Dining Rooms</option>
-            <option value="Kitchen">Kitchen</option>
-          </select>
-        </div>
       </div>
-
-      <button
-        onClick={handleUpload}
-        disabled={uploading}
-        className="mt-6 w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-      >
-        {uploading ? 'Uploading...' : 'Upload to Gallery'}
-      </button>
-    </div>
+    </div >
   );
 };
 

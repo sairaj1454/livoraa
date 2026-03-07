@@ -14,6 +14,7 @@ import ContactUs from './components/ContactUs'
 import Gallery from './components/Gallery'
 import Blog from './components/Blog'
 import BlogView from './components/BlogView'
+import GetQuote from './pages/GetQuote'
 import Login from './pages/admin/Login'
 import Dashboard from './pages/admin/Dashboard'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -22,22 +23,24 @@ import ScrollToTop from './components/ScrollToTop';
 import CustomerLogin from './pages/customer/Login';
 import CustomerDashboard from './pages/customer/Dashboard';
 import CustomerProtectedRoute from './components/CustomerProtectedRoute';
+import { ImageKitProvider } from '@imagekit/react';
+import { urlEndpoint, publicKey, authenticator } from './config/imagekit';
 
 // Initialize EmailJS
-emailjs.init('wGzsvi5X7v8prOba-');
+emailjs.init('oOOOitjU95GaDU0hL');
 
 // Admin Routes Component
 const AdminRoutes = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
-      <Route 
-        path="/dashboard" 
+      <Route
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <Dashboard />
           </ProtectedRoute>
-        } 
+        }
       />
     </Routes>
   )
@@ -82,6 +85,7 @@ const MainWebsiteRoutes = () => {
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:id" element={<BlogView />} />
+          <Route path="/get-quote" element={<GetQuote />} />
         </Routes>
       </main>
       <Footer />
@@ -92,6 +96,7 @@ const MainWebsiteRoutes = () => {
 function App() {
   return (
     <Router>
+      <ImageKitProvider urlEndpoint={urlEndpoint}>
         <ScrollToTop />
         <div className="min-h-screen flex flex-col">
           <Routes>
@@ -104,7 +109,7 @@ function App() {
           </Routes>
         </div>
         <ToastContainer position="bottom-right" />
-      
+      </ImageKitProvider>
     </Router>
   );
 }

@@ -20,6 +20,10 @@ export interface QuotationItem {
   type: string;
   area: number;
   price: number;
+  isLumpsum?: boolean;
+  customTypeName?: string;
+  isCustomItem?: boolean;
+  customItemLabel?: string;
 }
 
 export interface Quotation {

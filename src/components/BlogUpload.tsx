@@ -4,6 +4,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { XCircleIcon } from '@heroicons/react/24/outline';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { uploadFile } from '../config/imagekit';
 
 const BlogUpload: React.FC = () => {
   const [title, setTitle] = useState('');
@@ -14,7 +15,9 @@ const BlogUpload: React.FC = () => {
   const [authorName, setAuthorName] = useState('');
   const [readTime, setReadTime] = useState('');
   const [imageData, setImageData] = useState<string>('');
+  const [featuredFile, setFeaturedFile] = useState<File | null>(null);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
 
   const predefinedCategories = ['Interior Trends', 'Small Spaces', 'Sustainability', 'Color & Design', 'Renovation', 'Technology', 'DIY', 'Furniture', 'Other'];
@@ -22,48 +25,38 @@ const BlogUpload: React.FC = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      setFeaturedFile(file);
       const reader = new FileReader();
       reader.onload = () => {
         if (reader.result) {
           setImageData(reader.result.toString());
         }
       };
-      // Create a preview URL for immediate display
-      const previewUrl = URL.createObjectURL(file);
-      setImageData(previewUrl);
       reader.readAsDataURL(file);
     }
   };
 
   const handleGalleryImagesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const files = Array.from(e.target.files);
-      const newImages: string[] = [];
-      
-      files.forEach(file => {
-        // Create preview URLs for immediate display
-        const previewUrl = URL.createObjectURL(file);
-        newImages.push(previewUrl);
-        
+      const filesArr = Array.from(e.target.files);
+      setGalleryFiles(prev => [...prev, ...filesArr]);
+
+      filesArr.forEach(file => {
         const reader = new FileReader();
         reader.onload = () => {
           if (reader.result) {
-            // Update the preview URL with the actual base64 data when ready
-            setGalleryImages(prev => 
-              prev.map(img => img === previewUrl ? reader.result!.toString() : img)
-            );
+            setGalleryImages(prev => [...prev, reader.result!.toString()]);
           }
         };
         reader.readAsDataURL(file);
       });
-      
-      setGalleryImages(prev => [...prev, ...newImages]);
     }
   };
 
   const clearImage = () => {
     setImageData('');
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    setFeaturedFile(null);
+    const fileInput = document.getElementById('featured-image') as HTMLInputElement;
     if (fileInput) {
       fileInput.value = '';
     }
@@ -71,11 +64,12 @@ const BlogUpload: React.FC = () => {
 
   const removeGalleryImage = (index: number) => {
     setGalleryImages(prev => prev.filter((_, i) => i !== index));
+    setGalleryFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !excerpt || !content || !imageData || !authorName || !readTime || (!category && !customCategory)) {
+    if (!title || !excerpt || !content || !featuredFile || !authorName || !readTime || (!category && !customCategory)) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -83,6 +77,19 @@ const BlogUpload: React.FC = () => {
     setLoading(true);
 
     try {
+      // 1. Upload featured image to ImageKit
+      const featuredResult = await uploadFile(featuredFile, `blog_${Date.now()}_main.jpg`, "blogs") as any;
+
+      // 2. Upload gallery images if any
+      let uploadedGalleryUrls: string[] = [];
+      if (galleryFiles.length > 0) {
+        const galleryPromises = galleryFiles.map((file, idx) =>
+          uploadFile(file, `blog_${Date.now()}_gallery_${idx}.jpg`, "blogs")
+        );
+        const results = await Promise.all(galleryPromises) as any[];
+        uploadedGalleryUrls = results.map(res => res.url);
+      }
+
       const blogData = {
         title,
         excerpt,
@@ -90,8 +97,8 @@ const BlogUpload: React.FC = () => {
         category: category === 'Other' ? customCategory : category,
         authorName,
         readTime,
-        imageData,
-        galleryImages,
+        imageData: featuredResult.url,
+        galleryImages: uploadedGalleryUrls,
         createdAt: serverTimestamp(),
         date: new Date().toLocaleDateString('en-US', {
           year: 'numeric',
@@ -111,9 +118,11 @@ const BlogUpload: React.FC = () => {
       setAuthorName('');
       setReadTime('');
       setImageData('');
+      setFeaturedFile(null);
       setGalleryImages([]);
+      setGalleryFiles([]);
       clearImage();
-      
+
       toast.success('Blog post uploaded successfully!');
     } catch (err) {
       console.error('Error:', err);
@@ -337,11 +346,10 @@ const BlogUpload: React.FC = () => {
         <button
           type="submit"
           disabled={loading}
-          className={`w-full py-3 px-6 text-white rounded-md font-medium transition-colors ${
-            loading
-              ? 'bg-blue-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
-          }`}
+          className={`w-full py-3 px-6 text-white rounded-md font-medium transition-colors ${loading
+            ? 'bg-blue-400 cursor-not-allowed'
+            : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2'
+            }`}
         >
           {loading ? 'Publishing...' : 'Publish Blog Post'}
         </button>

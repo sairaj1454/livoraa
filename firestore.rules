@@ -1,9 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to check if user is admin
+    // Helper function to check if user is admin (role-based, no hardcoded emails)
     function isAdmin() {
-      return request.auth != null;
+      return request.auth != null && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/customers/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/customers/$(request.auth.uid)).data.role == 'admin')
+      );
     }
 
     // Helper function to validate employee data
@@ -57,25 +61,37 @@ service cloud.firestore {
 
     // Projects collection rules
     match /projects/{projectId} {
-      allow read: if isAdmin();
+      allow read: if isAdmin() || (request.auth != null && 
+               (request.auth.token.email == resource.data.clientEmail || 
+                request.auth.token.email == resource.data.email));
       allow create: if isAdmin() && isValidProject();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Admins collection rules
+    match /admins/{adminId} {
+      allow read: if isAdmin() || request.auth.uid == adminId;
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     // Customers collection rules
     match /customers/{customerId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid == customerId);
+      allow create: if isAdmin() || (request.auth != null && request.auth.uid == customerId);
+      allow update: if isAdmin() || (request.auth != null && request.auth.uid == customerId);
       allow delete: if isAdmin();
     }
 
     // Quotations collection rules
     match /quotations/{quotationId} {
       allow read: if isAdmin() || (request.auth != null && 
-               request.auth.token.email == resource.data.customerEmail);
-      allow create: if isAdmin() && isValidQuotation();
+               resource.data.sentToClient == true &&
+               (request.auth.token.email == resource.data.customerEmail || 
+                request.auth.token.email == resource.data.clientEmail));
+      allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -103,8 +119,23 @@ service cloud.firestore {
     // Enquiries rules - anyone can create, only admin can read
     match /enquiries/{document} {
       allow create: if true;  // Allow public form submissions
-      allow read: if isAdmin();  // Only admin can view enquiries
+      allow read: if isAdmin() || (request.auth != null && request.auth.token.email == resource.data.email);
       allow update, delete: if isAdmin();  // Only admin can modify/delete
+    }
+
+    // Personalized Enquiries rules - anyone can create, only admin can read
+    match /personalized_enquiries/{document} {
+      allow create: if true;  // Allow public form submissions
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();  // Only admin can modify/delete
+    }
+
+    // Client Enquiries rules - authenticated customers can create/read their own, admin has full access
+    match /client_enquiries/{document} {
+      allow create: if request.auth != null;
+      allow read: if isAdmin() || (request.auth != null && request.auth.token.email == resource.data.email);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // Blog rules - only admin can write, anyone can read
@@ -137,6 +168,54 @@ service cloud.firestore {
         && request.resource.data.rating is number
         && request.resource.data.rating >= 1
         && request.resource.data.rating <= 5;
+    }
+
+    // Receipts collection rules
+    match /receipts/{receiptId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Saved Credentials collection rules (admin-only, for offline credential storage)
+    match /savedCredentials/{credId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Business Details collection rules
+    match /businessDetails/{businessId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Item Types collection rules
+    match /itemTypes/{itemTypeId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Settings collection rules
+    match /settings/{settingId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Notifications collection rules
+    match /notifications/{notificationId} {
+      allow read: if isAdmin() || (request.auth != null && request.auth.token.email == resource.data.userEmail);
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (request.auth != null && request.auth.token.email == resource.data.userEmail);
+      allow delete: if isAdmin() || (request.auth != null && request.auth.token.email == resource.data.userEmail);
     }
 
     // Function to validate image size

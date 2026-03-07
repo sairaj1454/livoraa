@@ -19,7 +19,7 @@ export const useEmailNotification = () => {
   const sendEmail = async (data: EmailData) => {
     try {
       // Format the message based on whether it's a campaign or form submission
-      const formattedMessage = data.formType 
+      const formattedMessage = data.formType
         ? `
 New Enquiry from ${data.formType.toUpperCase()} Form
 
@@ -43,8 +43,8 @@ Submission Time: ${new Date().toLocaleString()}
       const templateParams = {
         to_email: data.to || 'ecnodev@gmail.com',
         subject: data.subject || `New ${data.formType} Enquiry`,
-        from_name: data.name || 'Virtuous Interiors',
-        from_email: data.email || 'noreply@virtuousinteriors.com',
+        from_name: data.name || 'LIVORAA ATELIER',
+        from_email: data.email || 'noreply@LIVORAA ATELIER.com',
         phone: data.phone || '',
         message: formattedMessage,
         form_type: data.formType || 'campaign',

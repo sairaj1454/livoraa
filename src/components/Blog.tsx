@@ -4,6 +4,7 @@ import { FaCalendar, FaUser, FaTags, FaClock, FaTimes } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../config/firebase';
 import { collection, query, getDocs, orderBy } from 'firebase/firestore';
+import { Image as IKImage } from '@imagekit/react';
 
 // Define blog post type
 interface BlogPost {
@@ -33,7 +34,7 @@ const Blog: React.FC = () => {
         const blogRef = collection(db, 'blogs');
         const q = query(blogRef, orderBy('createdAt', 'desc'));
         const querySnapshot = await getDocs(q);
-        
+
         const posts: BlogPost[] = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
@@ -78,7 +79,7 @@ const Blog: React.FC = () => {
   const filteredPosts = blogPosts.filter(post => {
     const matchesCategory = selectedCategory === 'All' || post.category === selectedCategory;
     const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         post.excerpt.toLowerCase().includes(searchQuery.toLowerCase());
+      post.excerpt.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
 
@@ -87,13 +88,13 @@ const Blog: React.FC = () => {
       {/* Hero Section */}
       <section className="relative min-h-screen w-full overflow-hidden" style={{ paddingTop: '80px' }}>
         {/* Background Image with Parallax Effect */}
-        <motion.div 
+        <motion.div
           className="absolute inset-0"
           initial={{ scale: 1.1 }}
           animate={{ scale: 1.0 }}
           transition={{ duration: 20, repeat: Infinity, repeatType: "reverse" }}
         >
-          <img 
+          <img
             src="https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?q=80&w=1920&auto=format&fit=crop"
             alt="Interior Design Blog"
             className="w-full h-full object-cover"
@@ -105,7 +106,7 @@ const Blog: React.FC = () => {
         <div className="relative min-h-[calc(120vh-80px)] flex items-center">
           <div className="max-w-[1440px] w-full mx-auto px-4">
             <div className="max-w-3xl mx-auto text-center">
-              <motion.span 
+              <motion.span
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
@@ -165,7 +166,7 @@ const Blog: React.FC = () => {
                   <p className="text-3xl font-bold text-[#C4A484] mb-2">{blogPosts.length}</p>
                   <p className="text-gray-200">Articles</p>
                 </div>
-              
+
                 <div className="text-center">
                   <p className="text-3xl font-bold text-[#C4A484] mb-2">{new Set(blogPosts.map(post => post.category)).size}</p>
                   <p className="text-gray-200">Categories</p>
@@ -186,11 +187,10 @@ const Blog: React.FC = () => {
                 <motion.button
                   key={category}
                   onClick={() => setSelectedCategory(category)}
-                  className={`px-6 py-3 rounded-full text-sm font-medium transition-all duration-300 ${
-                    selectedCategory === category
-                      ? 'bg-[#4A2D1D] text-white shadow-lg scale-105'
-                      : 'bg-white text-gray-600 hover:bg-[#C4A484]/20 hover:scale-105'
-                  }`}
+                  className={`px-6 py-3 rounded-full text-sm font-medium transition-all duration-300 ${selectedCategory === category
+                    ? 'bg-[#4A2D1D] text-white shadow-lg scale-105'
+                    : 'bg-white text-gray-600 hover:bg-[#C4A484]/20 hover:scale-105'
+                    }`}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -201,7 +201,7 @@ const Blog: React.FC = () => {
           </div>
 
           {/* Blog Grid */}
-          <motion.div 
+          <motion.div
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
             layout
           >
@@ -218,10 +218,12 @@ const Blog: React.FC = () => {
                   onClick={() => setSelectedPost(post)}
                 >
                   <div className="relative h-64">
-                    <img
+                    <IKImage
                       src={post.image}
                       alt={post.title}
                       className="w-full h-full object-cover"
+                      transformation={[{ width: "600", height: "400" }]}
+                      loading="lazy"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                     <span className="absolute bottom-4 left-4 px-4 py-1 rounded-full bg-[#4A2D1D] text-white text-sm font-medium">
@@ -278,10 +280,11 @@ const Blog: React.FC = () => {
               </button>
 
               <div className="relative h-[40vh] md:h-[50vh]">
-                <img
+                <IKImage
                   src={selectedPost.image}
                   alt={selectedPost.title}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
               </div>

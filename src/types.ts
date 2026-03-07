@@ -56,6 +56,9 @@ export interface QuotationItem {
   room: string;
   d1?: number;
   d2?: number;
+  customTypeName?: string;  // used when type === '__custom__'
+  isCustomItem?: boolean;    // used when item name is custom
+  customItemLabel?: string;  // used when item name is custom
 }
 
 export interface Quotation {

@@ -2,7 +2,7 @@ User-agent: *
 Allow: /
 
 # Sitemaps
-Sitemap: https://virtuousinteriors.com/sitemap.xml
+Sitemap: https://LIVORAA ATELIER.com/sitemap.xml
 
 # Optimize crawling
 Crawl-delay: 1

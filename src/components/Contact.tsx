@@ -32,7 +32,7 @@ const Contact: React.FC = () => {
   };
 
   return (
-    <section className="w-full bg-[#F8F3EE] flex-grow">
+    <section id="contact" className="w-full bg-[#F8F3EE] flex-grow">
       {/* Section Heading */}
       <div className="py-12 lg:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -53,7 +53,7 @@ const Contact: React.FC = () => {
       <div className="w-full pb-16 lg:pb-20">
         <div className="flex flex-col lg:flex-row max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 gap-8">
           {/* Left side - Image and Text */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -20 }}
             whileInView={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
@@ -78,7 +78,7 @@ const Contact: React.FC = () => {
           </motion.div>
 
           {/* Right side - Form */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: 20 }}
             whileInView={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6 }}
