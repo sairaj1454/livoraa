@@ -15,6 +15,7 @@ import Gallery from './components/Gallery'
 import Blog from './components/Blog'
 import BlogView from './components/BlogView'
 import GetQuote from './pages/GetQuote'
+import LivoraaComfort from './components/LivoraaComfort'
 import Login from './pages/admin/Login'
 import Dashboard from './pages/admin/Dashboard'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -25,7 +26,6 @@ import CustomerDashboard from './pages/customer/Dashboard';
 import CustomerProtectedRoute from './components/CustomerProtectedRoute';
 import { ImageKitProvider } from '@imagekit/react';
 import { urlEndpoint, publicKey, authenticator } from './config/imagekit';
-
 // Initialize EmailJS
 emailjs.init('oOOOitjU95GaDU0hL');
 
@@ -86,6 +86,7 @@ const MainWebsiteRoutes = () => {
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:id" element={<BlogView />} />
           <Route path="/get-quote" element={<GetQuote />} />
+          <Route path="/comfort" element={<LivoraaComfort />} />
         </Routes>
       </main>
       <Footer />

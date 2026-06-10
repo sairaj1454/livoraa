@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FaUser, FaEnvelope, FaPhone, FaPencilAlt, FaMapMarkerAlt, FaClock, FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaPhone, FaPencilAlt, FaMapMarkerAlt, FaClock, FaInstagram } from 'react-icons/fa';
 import { useFormSubmission } from '../hooks/useFormSubmission';
 import { toast } from 'react-toastify';
+
+interface FormErrors {
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+}
 
 const ContactUs: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -11,11 +18,57 @@ const ContactUs: React.FC = () => {
     phone: '',
     message: ''
   });
+  const [errors, setErrors] = useState<FormErrors>({ name: '', email: '', phone: '', message: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { submitForm } = useFormSubmission();
 
+  const validate = (): boolean => {
+    const newErrors: FormErrors = { name: '', email: '', phone: '', message: '' };
+    let valid = true;
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Full name is required';
+      valid = false;
+    } else if (formData.name.trim().length < 2) {
+      newErrors.name = 'Name must be at least 2 characters';
+      valid = false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email address is required';
+      valid = false;
+    } else if (!emailRegex.test(formData.email)) {
+      newErrors.email = 'Enter a valid email address';
+      valid = false;
+    }
+
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Phone number is required';
+      valid = false;
+    } else if (!phoneRegex.test(formData.phone.replace(/\s/g, ''))) {
+      newErrors.phone = 'Enter a valid 10-digit Indian mobile number';
+      valid = false;
+    }
+
+    if (!formData.message.trim()) {
+      newErrors.message = 'Message is required';
+      valid = false;
+    } else if (formData.message.trim().length < 10) {
+      newErrors.message = 'Message must be at least 10 characters';
+      valid = false;
+    }
+
+    setErrors(newErrors);
+    return valid;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
+    setIsSubmitting(true);
     try {
       const result = await submitForm({
         ...formData,
@@ -24,11 +77,14 @@ const ContactUs: React.FC = () => {
       if (result.success) {
         toast.success('Thank you for your message! We will contact you soon.');
         setFormData({ name: '', email: '', phone: '', message: '' });
+        setErrors({ name: '', email: '', phone: '', message: '' });
       } else {
         toast.error('Failed to submit form. Please try again.');
       }
     } catch (error) {
       toast.error('An error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -111,12 +167,15 @@ const ContactUs: React.FC = () => {
                   <input
                     type="text"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-[#4A2D1D]/20 transition-all text-gray-800 placeholder:text-gray-400"
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value });
+                      if (errors.name) setErrors({ ...errors, name: '' });
+                    }}
+                    className={`w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50 border ${errors.name ? 'border-red-400 focus:ring-red-300' : 'border-transparent focus:ring-[#4A2D1D]/20'} focus:ring-2 transition-all text-gray-800 placeholder:text-gray-400`}
                     placeholder="Enter your full name"
-                    required
                   />
                 </div>
+                {errors.name && <p className="text-red-500 text-xs ml-1">{errors.name}</p>}
               </div>
 
               <div className="space-y-2">
@@ -126,27 +185,37 @@ const ContactUs: React.FC = () => {
                   <input
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-[#4A2D1D]/20 transition-all text-gray-800 placeholder:text-gray-400"
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      if (errors.email) setErrors({ ...errors, email: '' });
+                    }}
+                    className={`w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50 border ${errors.email ? 'border-red-400 focus:ring-red-300' : 'border-transparent focus:ring-[#4A2D1D]/20'} focus:ring-2 transition-all text-gray-800 placeholder:text-gray-400`}
                     placeholder="Enter your email address"
-                    required
                   />
                 </div>
+                {errors.email && <p className="text-red-500 text-xs ml-1">{errors.email}</p>}
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-gray-600 ml-1">Phone Number</label>
-                <div className="relative">
-                  <FaPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <div className={`flex rounded-xl bg-gray-50 border ${errors.phone ? 'border-red-400' : 'border-transparent'} overflow-hidden focus-within:ring-2 ${errors.phone ? 'focus-within:ring-red-300' : 'focus-within:ring-[#4A2D1D]/20'} transition-all`}>
+                  <span className="flex items-center px-3 bg-gray-200 text-gray-600 font-semibold text-sm border-r border-gray-300 select-none whitespace-nowrap">
+                    +91
+                  </span>
                   <input
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-[#4A2D1D]/20 transition-all text-gray-800 placeholder:text-gray-400"
+                    maxLength={10}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setFormData({ ...formData, phone: val });
+                      if (errors.phone) setErrors({ ...errors, phone: '' });
+                    }}
+                    className="flex-1 px-3 py-4 bg-transparent focus:outline-none text-gray-800 placeholder:text-gray-400"
                     placeholder="Enter your phone number"
-                    required
                   />
                 </div>
+                {errors.phone && <p className="text-red-500 text-xs ml-1">{errors.phone}</p>}
               </div>
 
               <div className="space-y-2">
@@ -155,20 +224,32 @@ const ContactUs: React.FC = () => {
                   <FaPencilAlt className="absolute left-4 top-5 text-gray-400" />
                   <textarea
                     value={formData.message}
-                    onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, message: e.target.value });
+                      if (errors.message) setErrors({ ...errors, message: '' });
+                    }}
                     rows={5}
-                    className="w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50 border-none focus:ring-2 focus:ring-[#4A2D1D]/20 transition-all text-gray-800 placeholder:text-gray-400 resize-none"
+                    className={`w-full pl-12 pr-4 py-4 rounded-xl bg-gray-50 border ${errors.message ? 'border-red-400 focus:ring-red-300' : 'border-transparent focus:ring-[#4A2D1D]/20'} focus:ring-2 transition-all text-gray-800 placeholder:text-gray-400 resize-none`}
                     placeholder="Enter your message"
-                    required
                   />
                 </div>
+                {errors.message && <p className="text-red-500 text-xs ml-1">{errors.message}</p>}
               </div>
 
               <button
                 type="submit"
-                className="w-full bg-[#3D2316] text-white py-5 rounded-xl font-bold text-lg hover:bg-[#2D1910] transition-all transform active:scale-[0.98] shadow-lg shadow-[#4A2D1D]/20 mt-4"
+                disabled={isSubmitting}
+                className="w-full bg-[#3D2316] text-white py-5 rounded-xl font-bold text-lg hover:bg-[#2D1910] transition-all transform active:scale-[0.98] shadow-lg shadow-[#4A2D1D]/20 mt-4 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Send Message
+                {isSubmitting ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Sending...
+                  </>
+                ) : 'Send Message'}
               </button>
             </form>
           </motion.div>

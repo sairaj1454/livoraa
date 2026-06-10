@@ -244,12 +244,11 @@ const About: React.FC = () => {
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-8"
+            className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl mx-auto"
           >
             {[
               { name: "L. Tharun" },
-              { name: "Y. Chaitanya" },
-              { name: "Y. Gopi" }
+              { name: "Y. Chaitanya" }
             ].map((member, index) => (
               <motion.div
                 key={index}

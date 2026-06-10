@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation } from 'react-router-dom';
-import { HiHome, HiPhotograph, HiNewspaper, HiInformationCircle, HiMail, HiX, HiUser } from 'react-icons/hi';
+import { HiHome, HiPhotograph, HiNewspaper, HiInformationCircle, HiMail, HiX, HiUser, HiOutlineSparkles } from 'react-icons/hi';
 import { FaWhatsapp } from 'react-icons/fa';
 import './Navbar.css';
 
@@ -81,6 +81,19 @@ const Navbar: React.FC = () => {
                   </div>
                 ))}
               </div>
+
+              {/* Comfort special link */}
+              <Link
+                to="/comfort"
+                className={`flex items-center gap-1.5 text-[14px] font-bold px-4 py-2 rounded-full transition-all ${
+                  location.pathname === '/comfort'
+                    ? 'bg-[#8B5E3C] text-white shadow-md'
+                    : 'bg-[#8B5E3C]/10 text-[#8B5E3C] hover:bg-[#8B5E3C]/20'
+                }`}
+              >
+                <HiOutlineSparkles className="text-base" />
+                Livoraa Comfort
+              </Link>
 
               <div className="flex items-center gap-4">
                 <motion.button
@@ -173,6 +186,25 @@ const Navbar: React.FC = () => {
                         <span className="font-medium text-[16px]">{item.label}</span>
                       </Link>
                     ))}
+                  </div>
+
+                  {/* Comfort special link */}
+                  <div className="mt-3 px-1">
+                    <Link
+                      to="/comfort"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={`flex items-center gap-3 px-5 py-4 rounded-2xl font-bold text-[15px] transition-all ${
+                        location.pathname === '/comfort'
+                          ? 'bg-[#8B5E3C] text-white shadow-md'
+                          : 'bg-[#8B5E3C]/10 text-[#8B5E3C] hover:bg-[#8B5E3C]/20'
+                      }`}
+                    >
+                      <HiOutlineSparkles className="w-5 h-5" />
+                      <span>Livoraa Comfort</span>
+                      <span className="ml-auto text-[10px] font-black uppercase tracking-wider bg-[#8B5E3C] text-white px-2 py-0.5 rounded-full">
+                        NEW
+                      </span>
+                    </Link>
                   </div>
                 </div>
 

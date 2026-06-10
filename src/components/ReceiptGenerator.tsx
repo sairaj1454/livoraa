@@ -21,9 +21,9 @@ import {
 interface ReceiptItem {
   id: string;
   description: string;
-  quantity: number | '';
-  price: number | '';
-  amount: number;
+  quantity: string | number;
+  price: string | number;
+  amount: string | number;
 }
 
 interface ReceiptData {
@@ -78,13 +78,16 @@ const ReceiptGenerator = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [isCustomerPopupOpen, setIsCustomerPopupOpen] = useState(false);
+  const [isManualEntry, setIsManualEntry] = useState(false);
   const [clientName, setClientName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
 
-  const [receiptNo, setReceiptNo] = useState(`RC-${Date.now()}`);
+  const [receiptNo, setReceiptNo] = useState('');
+  const [receiptDate, setReceiptDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [quotationNo, setQuotationNo] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
-  const [items, setItems] = useState<ReceiptItem[]>([{ id: '1', description: '', quantity: 1, price: 0, amount: 0 }]);
+  const [items, setItems] = useState<ReceiptItem[]>([{ id: '1', description: '', quantity: '1', price: '0', amount: '0' }]);
   const [isDetailedView, setIsDetailedView] = useState(false);
   const [isLoadingQuotation, setIsLoadingQuotation] = useState(false);
   const [companySettings, setCompanySettings] = useState<any>(null);
@@ -118,17 +121,17 @@ const ReceiptGenerator = () => {
       const snap = await getDocs(collection(db, 'receipts'));
       let maxNum = 0;
       snap.forEach(d => {
-        const rNo = d.data().receiptNo;
-        if (rNo && rNo.startsWith('RC-')) {
-          const numStr = rNo.substring(3);
-          const num = parseInt(numStr);
+        const rNo: string = d.data().receiptNo || '';
+        if (rNo.startsWith('RC-')) {
+          const num = parseInt(rNo.replace('RC-', ''), 10);
           if (!isNaN(num) && num > maxNum) maxNum = num;
         }
       });
-      const nextNum = maxNum > 0 ? maxNum + 1 : Date.now();
-      setReceiptNo(`RC-${nextNum}`);
+      const nextNum = maxNum + 1;
+      setReceiptNo(`RC-${String(nextNum).padStart(3, '0')}`);
     } catch {
-      setReceiptNo(`RC-${Date.now()}`);
+      // fallback: 3-digit random
+      setReceiptNo(`RC-${String(Math.floor(Math.random() * 900) + 100)}`);
     }
   };
 
@@ -136,7 +139,17 @@ const ReceiptGenerator = () => {
     setSelectedCustomer(customer.id);
     setClientName(customer.name || '');
     setCustomerEmail(customer.email || '');
+    setCustomerPhone((customer as any).phone || '');
+    setIsManualEntry(false);
     setIsCustomerPopupOpen(false);
+  };
+
+  const handleManualEntry = () => {
+    setIsManualEntry(true);
+    setSelectedCustomer('');
+    setClientName('');
+    setCustomerEmail('');
+    setCustomerPhone('');
   };
 
   const loadQuotation = async () => {
@@ -159,9 +172,9 @@ const ReceiptGenerator = () => {
         return {
           id: String(idx + 1),
           description: `${item.item} (${item.room})`,
-          quantity: qty,
-          price: pr,
-          amount: Math.round(pr * qty)
+          quantity: String(qty),
+          price: String(pr),
+          amount: String(Math.round(pr * qty))
         };
       }));
 
@@ -170,10 +183,10 @@ const ReceiptGenerator = () => {
     finally { setIsLoadingQuotation(false); }
   };
 
-  const addItem = () => setItems([...items, { id: String(Date.now()), description: '', quantity: 1, price: 0, amount: 0 }]);
+  const addItem = () => setItems([...items, { id: String(Date.now()), description: '', quantity: '1', price: '0', amount: '0' }]);
   const removeItem = (id: string) => setItems(items.filter(i => i.id !== id));
-  const updateItem = (id: string, field: keyof ReceiptItem, value: any) => {
-    setItems(items.map(i => i.id === id ? { ...i, [field]: value } : i));
+  const updateItem = (id: string, updates: Partial<ReceiptItem>) => {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, ...updates } : i));
   };
 
   const totalAmount = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -266,7 +279,7 @@ const ReceiptGenerator = () => {
 
     st(C.black); pdf.setFont('helvetica', 'bold');
     pdf.text(receiptNo, ML + boxW - 8, infoY, { align: 'right' });
-    pdf.text(new Date().toLocaleDateString('en-GB'), ML + boxW - 8, infoY + 8, { align: 'right' });
+    pdf.text(new Date(receiptDate + 'T00:00:00').toLocaleDateString('en-GB'), ML + boxW - 8, infoY + 8, { align: 'right' });
     pdf.text(quotationNo || 'Direct Payment', ML + boxW - 8, infoY + 16, { align: 'right' });
     pdf.text(companySettings?.name || 'Livoraa Atelier', ML + boxW - 8, infoY + 24, { align: 'right' });
     st(C.amtOrange);
@@ -286,7 +299,7 @@ const ReceiptGenerator = () => {
     pdf.text(clientName || '—', bX + 8, y + 18);
     st(C.midGray); pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal');
     pdf.text(customerEmail || '—', bX + 8, y + 26);
-    pdf.text(cust?.phone || '+91 —', bX + 8, y + 32);
+    pdf.text(cust?.phone || customerPhone ? `+91 ${customerPhone || cust?.phone}` : '+91 —', bX + 8, y + 32);
     if (cust?.address) {
       const addr = `${cust.address.street}, ${cust.address.city}, ${cust.address.state}`.substring(0, 45);
       pdf.text(addr, bX + 8, y + 39);
@@ -426,23 +439,25 @@ const ReceiptGenerator = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCustomer || !paymentMethod) { toast.warning('Missing required fields'); return; }
+    if (!isManualEntry && !selectedCustomer) { toast.warning('Please select a customer or enter details manually'); return; }
+    if (isManualEntry && !clientName.trim()) { toast.warning('Please enter the customer name'); return; }
+    if (!paymentMethod) { toast.warning('Please select a payment method'); return; }
 
     try {
       const data: any = {
         receiptNo,
-        clientId: selectedCustomer,
+        receiptDate,
+        clientId: selectedCustomer || 'manual',
         clientName,
         customerEmail,
+        customerPhone,
         items,
         total: totalAmount,
         paymentMethod,
         timestamp: Timestamp.now()
       };
 
-      if (quotationNo) {
-        data.quotationNo = quotationNo;
-      }
+      if (quotationNo) data.quotationNo = quotationNo;
 
       await addDoc(collection(db, 'receipts'), data);
 
@@ -501,6 +516,15 @@ const ReceiptGenerator = () => {
               />
             </div>
             <div>
+              <label className={labelCls}>Receipt Date</label>
+              <input
+                type="date"
+                className={inputCls}
+                value={receiptDate}
+                onChange={e => setReceiptDate(e.target.value)}
+              />
+            </div>
+            <div className="md:col-span-2">
               <label className={labelCls}>Quotation Number (Optional)</label>
               <div className="flex gap-3">
                 <input
@@ -529,53 +553,111 @@ const ReceiptGenerator = () => {
           subtitle="Details of the client paying"
           icon={UserIcon}
           action={
-            <button type="button" className="text-indigo-600 bg-indigo-50 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-indigo-100 transition-all">
+            <button
+              type="button"
+              onClick={handleManualEntry}
+              className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all ${isManualEntry ? 'bg-indigo-600 text-white' : 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'}`}
+            >
               <PlusIcon className="w-4 h-4" /> Enter Manually
             </button>
           }
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="md:col-span-2">
-              <label className={labelCls}>Select Customer *</label>
-              <div
-                onClick={() => setIsCustomerPopupOpen(true)}
-                className="w-full p-5 bg-gray-50 rounded-2xl font-bold text-gray-700 shadow-inner cursor-pointer flex items-center justify-between border-2 border-transparent hover:border-indigo-100 transition-all"
-              >
-                <span className={selectedCustomer ? 'text-gray-700' : 'text-gray-400'}>
-                  {clientName || 'Click to select from database'}
-                </span>
-                <UserIcon className="w-6 h-6 text-gray-400" />
+          {!isManualEntry ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="md:col-span-2">
+                  <label className={labelCls}>Select Customer *</label>
+                  <div
+                    onClick={() => setIsCustomerPopupOpen(true)}
+                    className="w-full p-5 bg-gray-50 rounded-2xl font-bold text-gray-700 shadow-inner cursor-pointer flex items-center justify-between border-2 border-transparent hover:border-indigo-100 transition-all"
+                  >
+                    <span className={selectedCustomer ? 'text-gray-700' : 'text-gray-400'}>
+                      {clientName || 'Click to select from database'}
+                    </span>
+                    <UserIcon className="w-6 h-6 text-gray-400" />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {currentCustomer && (
-            <div className="mt-8 p-8 bg-indigo-50/50 rounded-3xl border border-indigo-100/50 animate-in fade-in slide-in-from-top-4 duration-500">
-              <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <CheckIcon className="w-4 h-4" /> Selected Customer Details:
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-12">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Name:</span>
-                  <span className="font-bold text-gray-700">{currentCustomer.name}</span>
+              {currentCustomer && (
+                <div className="mt-8 p-8 bg-indigo-50/50 rounded-3xl border border-indigo-100/50 animate-in fade-in slide-in-from-top-4 duration-500">
+                  <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <CheckIcon className="w-4 h-4" /> Selected Customer Details:
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-12">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Name:</span>
+                      <span className="font-bold text-gray-700">{currentCustomer.name}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Email:</span>
+                      <span className="font-bold text-gray-700">{currentCustomer.email}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Phone:</span>
+                      <span className="font-bold text-gray-700">{currentCustomer.phone}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">City:</span>
+                      <span className="font-bold text-gray-700">{currentCustomer.address?.city || '—'}</span>
+                    </div>
+                    <div className="md:col-span-2 flex flex-col gap-1 pt-2 border-t border-indigo-100/30">
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Address:</span>
+                      <span className="font-bold text-gray-600 leading-relaxed italic">
+                        {currentCustomer.address?.street}, {currentCustomer.address?.city}, {currentCustomer.address?.state} - {currentCustomer.address?.pincode}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Email:</span>
-                  <span className="font-bold text-gray-700">{currentCustomer.email}</span>
+              )}
+            </>
+          ) : (
+            <div className="space-y-6">
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl text-sm text-amber-800 font-medium flex items-center gap-2">
+                <PlusIcon className="w-4 h-4 shrink-0" />
+                Entering customer details manually. These will be used on the receipt but not saved to the database.
+                <button
+                  type="button"
+                  onClick={() => { setIsManualEntry(false); setClientName(''); setCustomerEmail(''); setCustomerPhone(''); }}
+                  className="ml-auto text-xs font-bold text-amber-700 underline hover:no-underline"
+                >
+                  Switch to database
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className={labelCls}>Full Name *</label>
+                  <input
+                    className={inputCls}
+                    value={clientName}
+                    onChange={e => setClientName(e.target.value)}
+                    placeholder="Customer full name"
+                    required
+                  />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Phone:</span>
-                  <span className="font-bold text-gray-700">{currentCustomer.phone}</span>
+                <div>
+                  <label className={labelCls}>Email Address</label>
+                  <input
+                    type="email"
+                    className={inputCls}
+                    value={customerEmail}
+                    onChange={e => setCustomerEmail(e.target.value)}
+                    placeholder="customer@email.com"
+                  />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">City:</span>
-                  <span className="font-bold text-gray-700">{currentCustomer.address?.city || '—'}</span>
-                </div>
-                <div className="md:col-span-2 flex flex-col gap-1 pt-2 border-t border-indigo-100/30">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Address:</span>
-                  <span className="font-bold text-gray-600 leading-relaxed italic">
-                    {currentCustomer.address?.street}, {currentCustomer.address?.city}, {currentCustomer.address?.state} - {currentCustomer.address?.pincode}
-                  </span>
+                <div>
+                  <label className={labelCls}>Phone Number</label>
+                  <div className="flex rounded-2xl overflow-hidden shadow-inner bg-gray-50 border-none">
+                    <span className="flex items-center px-3 bg-gray-200 text-gray-600 font-semibold text-sm border-r border-gray-300 select-none whitespace-nowrap">+91</span>
+                    <input
+                      type="tel"
+                      className="flex-1 p-4 bg-gray-50 focus:ring-0 outline-none font-bold text-gray-700"
+                      value={customerPhone}
+                      maxLength={10}
+                      onChange={e => setCustomerPhone(e.target.value.replace(/\D/g, ''))}
+                      placeholder="10-digit mobile number"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -627,77 +709,120 @@ const ReceiptGenerator = () => {
           <div className="space-y-6">
             {items.map((item, idx) => (
               <div key={item.id} className="grid grid-cols-1 md:grid-cols-12 gap-6 p-6 bg-gray-50/50 rounded-[2rem] border border-gray-100 relative group">
-                <div className={`md:col-span-${isDetailedView ? '5' : '8'}`}>
+                {/* Description - Now Full Width */}
+                <div className="md:col-span-12">
                   <label className={labelCls}>Description</label>
-                  <input
-                    className={inputCls}
+                  <textarea
+                    rows={2}
+                    className={`${inputCls} resize-none min-h-[80px]`}
                     value={item.description}
-                    onChange={e => updateItem(item.id, 'description', e.target.value)}
-                    placeholder={isDetailedView ? "E.g. Modular Kitchen" : "E.g. Advance payment for Modular Kitchen"}
+                    onChange={e => updateItem(item.id, { description: e.target.value })}
+                    placeholder={isDetailedView ? "E.g. Modular Kitchen with high-end finish and specialized hardware installation" : "E.g. Advance payment for Modular Kitchen design and material procurement"}
                   />
                 </div>
 
-                {isDetailedView && (
-                  <>
-                    <div className="md:col-span-2">
-                      <label className={labelCls}>QTY / SFT</label>
-                      <input
-                        type="number"
-                        className={inputCls}
-                        value={item.quantity}
-                        onChange={e => {
-                          const qty = e.target.value === '' ? '' : Number(e.target.value);
-                          const price = Number(item.price) || 0;
-                          updateItem(item.id, 'quantity', qty);
-                          if (qty !== '') updateItem(item.id, 'amount', Number(qty) * price);
-                        }}
-                        placeholder="Qty"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className={labelCls}>Price</label>
+                {/* Sub-fields Row */}
+                <div className="md:col-span-12 grid grid-cols-1 md:grid-cols-11 gap-6 items-end border-t border-gray-50 pt-4 mt-2">
+                  {isDetailedView ? (
+                    <>
+                      <div className="md:col-span-3">
+                        <label className={labelCls}>QTY / SFT</label>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className={inputCls}
+                          value={item.quantity}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                              const price = Number(item.price) || 0;
+                              const amt = val === '' ? 0 : Number(val) * price;
+                              updateItem(item.id, { 
+                                quantity: val, 
+                                amount: String(Math.round(amt)) 
+                              });
+                            }
+                          }}
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="md:col-span-3">
+                        <label className={labelCls}>Price</label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            className={`${inputCls} pl-8`}
+                            value={item.price}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                const qty = Number(item.quantity) || 0;
+                                const amt = val === '' ? 0 : Number(val) * qty;
+                                updateItem(item.id, { 
+                                  price: val, 
+                                  amount: String(Math.round(amt)) 
+                                });
+                              }
+                            }}
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                      <div className="md:col-span-4">
+                        <label className={labelCls}>Total Amount</label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            className={`${inputCls} pl-8 font-black text-emerald-600`}
+                            value={item.amount}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                updateItem(item.id, { amount: val });
+                              }
+                            }}
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="md:col-span-10">
+                      <label className={labelCls}>Amount</label>
                       <div className="relative">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
                         <input
-                          type="number"
+                          type="text"
+                          inputMode="decimal"
                           className={`${inputCls} pl-8`}
-                          value={item.price}
+                          value={item.amount}
                           onChange={e => {
-                            const price = e.target.value === '' ? '' : Number(e.target.value);
-                            const qty = Number(item.quantity) || 0;
-                            updateItem(item.id, 'price', price);
-                            if (price !== '') updateItem(item.id, 'amount', Number(price) * qty);
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                              updateItem(item.id, { amount: val });
+                            }
                           }}
-                          placeholder="Price"
+                          placeholder="0"
                         />
                       </div>
                     </div>
-                  </>
-                )}
-
-                <div className={isDetailedView ? "md:col-span-2" : "md:col-span-3"}>
-                  <label className={labelCls}>{isDetailedView ? 'Total Amount' : 'Amount'}</label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">₹</span>
-                    <input
-                      type="number"
-                      className={`${inputCls} pl-8 ${isDetailedView ? 'font-black text-emerald-600' : ''}`}
-                      value={item.amount}
-                      onChange={e => updateItem(item.id, 'amount', e.target.value === '' ? '' : Number(e.target.value))}
-                    />
-                  </div>
-                </div>
-
-                <div className="md:col-span-1 flex items-end justify-center pb-2">
-                  {items.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeItem(item.id)}
-                      className="text-red-400 hover:text-red-600 hover:bg-red-50 p-3 rounded-xl transition-all"
-                    >
-                      <TrashIcon className="w-6 h-6" />
-                    </button>
                   )}
+
+                  <div className="md:col-span-1 flex justify-center pb-2">
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeItem(item.id)}
+                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-4 rounded-2xl transition-all"
+                      >
+                        <TrashIcon className="w-6 h-6" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}

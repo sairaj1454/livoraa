@@ -146,7 +146,7 @@ const BlogUpload: React.FC = () => {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-md text-gray-700 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base transition-all"
             placeholder="Enter blog title"
             required
           />
@@ -159,7 +159,7 @@ const BlogUpload: React.FC = () => {
           <textarea
             value={excerpt}
             onChange={(e) => setExcerpt(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-md text-gray-700 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-24"
+            className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-28 text-base transition-all"
             placeholder="Brief summary of the blog post"
             required
           />
@@ -172,7 +172,7 @@ const BlogUpload: React.FC = () => {
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-md text-gray-700 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-48"
+            className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-64 text-base transition-all"
             placeholder="Write your blog content here"
             required
           />
@@ -186,7 +186,7 @@ const BlogUpload: React.FC = () => {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-md text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base transition-all appearance-none bg-white"
               required
             >
               <option value="">Select a category</option>
@@ -207,7 +207,7 @@ const BlogUpload: React.FC = () => {
                 type="text"
                 value={customCategory}
                 onChange={(e) => setCustomCategory(e.target.value)}
-                className="w-full p-3 border border-gray-300 rounded-md text-gray-700 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base transition-all"
                 placeholder="Enter custom category"
                 required
               />
@@ -222,7 +222,7 @@ const BlogUpload: React.FC = () => {
               type="text"
               value={authorName}
               onChange={(e) => setAuthorName(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-md text-gray-700 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base transition-all"
               placeholder="Enter author name"
               required
             />
@@ -236,7 +236,7 @@ const BlogUpload: React.FC = () => {
               type="text"
               value={readTime}
               onChange={(e) => setReadTime(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded-md text-gray-700 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full p-4 border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base transition-all"
               placeholder="e.g., 5 min read"
               required
             />

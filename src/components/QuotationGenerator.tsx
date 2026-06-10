@@ -41,6 +41,10 @@ interface QuotationData {
   total: number;
   quotationNo: string;
   validTill: string;
+  materialType: string;
+  hardwareCompany: string;
+  laminationType: string;
+  customMaterialDetails?: string; 
   timestamp: Timestamp;
 }
 
@@ -120,10 +124,20 @@ const QuotationGenerator = () => {
   const [sgst, setSgst] = useState(0);
   const [discount, setDiscount] = useState(0);
 
+  // ── Material Info ──
+  const [materialType, setMaterialType] = useState('');
+  const [hardwareCompany, setHardwareCompany] = useState('');
+  const [laminationType, setLaminationType] = useState('');
+  const [customMaterialDetails, setCustomMaterialDetails] = useState('');
+
   const [masterTerms, setMasterTerms] = useState<string[]>([]);
   const [terms, setTerms] = useState<string[]>([]);
   const [newTerm, setNewTerm] = useState('');
   const [editingTerm, setEditingTerm] = useState<{ index: number; text: string } | null>(null);
+
+  // ── Review & Edit Modal ──
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
   // ─── Fetch data ────────────────────────────────────────────────────────────
   const [itemSearch, setItemSearch] = useState('');
@@ -322,18 +336,19 @@ const QuotationGenerator = () => {
     setItems(prev => [...prev, newItem]);
   };
 
-  const updateItem = (itemId: string, field: keyof QuotationItem, value: any) => {
+  const updateItem = (itemId: string, updates: Partial<QuotationItem>) => {
     setItems(prev => prev.map(item => {
       if (item.id !== itemId) return item;
-      const updated: QuotationItem = { ...item, [field]: value };
+      const updated: QuotationItem = { ...item, ...updates };
 
-      if (field === 'type') {
-        if (value === '__custom__') {
+      // Handle type change
+      if (updates.type !== undefined) {
+        if (updates.type === '__custom__') {
           updated.price = 0;
           updated.isLumpsum = false;
           updated.customTypeName = '';
         } else {
-          const t = itemTypes.find(t => t.name === value);
+          const t = itemTypes.find(t => t.name === updates.type);
           if (t) {
             updated.price = t.rate;
             updated.isLumpsum = t.isLumpsum;
@@ -342,10 +357,12 @@ const QuotationGenerator = () => {
         }
       }
 
-      // Handle area calculation for both predefined and custom types
+      // Handle dimension changes and area calculation
       const isLump = updated.type === '__custom__' ? updated.isLumpsum : itemTypes.find(t => t.name === updated.type)?.isLumpsum;
-      if ((field === 'd1' || field === 'd2') && !isLump) {
-        updated.area = (updated.d1 ?? 0) * (updated.d2 ?? 0);
+      if (!isLump) {
+        const d1 = Number(updated.d1) || 0;
+        const d2 = Number(updated.d2) || 0;
+        updated.area = d1 * d2;
       }
 
       return updated;
@@ -390,7 +407,7 @@ const QuotationGenerator = () => {
     const isCustom = item.type === '__custom__';
     const t = isCustom ? null : itemTypes.find(t => t.name === item.type);
     const isLump = isCustom ? item.isLumpsum : t?.isLumpsum;
-    const itemAmount = isLump ? item.price : item.price * item.area;
+    const itemAmount = isLump ? Number(item.price) : Number(item.price) * item.area;
     return sum + itemAmount;
   }, 0);
   const calcServicesTotal = () => services.reduce((s, sv) => s + sv.price, 0);
@@ -431,6 +448,10 @@ const QuotationGenerator = () => {
         total: Math.round(calcTotal()),
         quotationNo,
         validTill,
+        materialType,
+        hardwareCompany,
+        laminationType,
+        customMaterialDetails,
         timestamp: Timestamp.now(),
         sentToClient: false,   // Hidden from customer until admin sends it
       };
@@ -475,8 +496,15 @@ const QuotationGenerator = () => {
 
 
   // ─── PDF ───────────────────────────────────────────────────────────────────
+  const handleOpenReview = () => {
+    if (items.length === 0) {
+      toast.warning('Add some items first');
+      return;
+    }
+    setIsReviewOpen(true);
+  };
 
-  const generatePDF = () => {
+  const generateQuotationPDF = (mode: 'download' | 'preview' = 'download') => {
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const PW = pdf.internal.pageSize.getWidth();
     const PH = pdf.internal.pageSize.getHeight();
@@ -607,14 +635,50 @@ const QuotationGenerator = () => {
     pdf.setFontSize(9.5); pdf.setFont('helvetica', 'bold'); st(C.black);
     pdf.text(clientName || '—', tX + 7, y + 15);
     pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal'); st(C.darkGray);
-    (pdf.splitTextToSize(siteAddress || '—', cW - 12) as string[]).slice(0, 3)
-      .forEach((l: string, i: number) => pdf.text(l, tX + 7, y + 21 + i * 5.5));
+    const addressLines = pdf.splitTextToSize(siteAddress || '—', cW - 12) as string[];
+    addressLines.forEach((l: string, i: number) => pdf.text(l, tX + 7, y + 21 + i * 5.5));
     if (siteCode) {
       st(C.brown); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7);
-      pdf.text(`Site Code: ${siteCode} `, tX + 7, y + 40);
+      pdf.text(`Site Code: ${siteCode} `, tX + 7, y + 21 + (addressLines.length * 5.5) + 2);
     }
 
     y += cardH + 7;
+
+    // ─── Material Specifications ─────────────────────────────────────────────
+    if (materialType || hardwareCompany || laminationType || customMaterialDetails) {
+      const specs = [
+        { label: 'TYPE OF MATERIAL', value: materialType },
+        { label: 'HARDWARE COMPANY', value: hardwareCompany },
+        { label: 'LAMINATION TYPES', value: laminationType },
+        { label: 'CUSTOM DETAILS', value: customMaterialDetails },
+      ].filter(s => s.value);
+
+      const processed = specs.map(s => {
+        const vLines = pdf.splitTextToSize(s.value || '—', CW - 15) as string[];
+        return { label: s.label, lines: vLines, height: 7 + (vLines.length * 4) };
+      });
+
+      const totalH = processed.reduce((sum, p) => sum + p.height, 0) + 3;
+      
+      sf(C.offWhite); sd(C.lightGray); lw(0.2);
+      pdf.roundedRect(ML, y, CW, totalH, 1.5, 1.5, 'FD');
+      sf(C.gold); pdf.rect(ML, y, 2.5, totalH, 'F');
+
+      let specY = y + 5;
+      processed.forEach((p, i) => {
+        pdf.setFontSize(6.5); pdf.setFont('helvetica', 'bold'); st(C.midGray);
+        pdf.text(p.label, ML + 7, specY);
+        pdf.setFontSize(8.5); pdf.setFont('helvetica', 'bold'); st(C.brown);
+        pdf.text(p.lines, ML + 7, specY + 4.5);
+        specY += p.height;
+        if (i < processed.length - 1) {
+          sd(C.lightGray); lw(0.1); 
+          pdf.line(ML + 7, specY - 2, ML + CW - 7, specY - 2);
+        }
+      });
+
+      y += totalH + 5;
+    }
 
     // Gold rule before table
     sf(C.gold); lw(0); pdf.rect(ML, y, CW, 0.6, 'F');
@@ -629,14 +693,14 @@ const QuotationGenerator = () => {
       const itemName = item.item === '__custom_item__' ? (item.customItemLabel || 'Custom Item') : (item.item || '—');
 
       const qty = isLump ? 1 : item.area;
-      const amt = isLump ? item.price : item.price * item.area;
+      const amt = isLump ? Number(item.price) : Number(item.price) * item.area;
 
       return [
         String(idx + 1),
         `${itemName} [${typeLabel}] (${item.room})`,
         isLump ? 'Lumpsum' : `${qty.toFixed(2)} sft`,
-        `Rs.${item.price.toLocaleString('en-IN')} `,
-        `Rs.${Math.round(amt).toLocaleString('en-IN')} `,
+        `Rs.${Number(item.price).toLocaleString('en-IN')} `,
+        `Rs.${Math.round(Number(amt)).toLocaleString('en-IN')} `,
       ];
     });
 
@@ -759,10 +823,14 @@ const QuotationGenerator = () => {
     summaryLines.forEach(([label, val]) => {
       sd(C.lightGray); lw(0.12); pdf.line(sumX + 5, rowY - 2, sumX + sumW - 5, rowY - 2);
       st(C.midGray); pdf.setFontSize(7.5); pdf.setFont('helvetica', 'normal');
-      pdf.text(label, sumX + 7, rowY + 2.5);
+      
+      const labelLines = pdf.splitTextToSize(label, sumW - 35) as string[];
+      pdf.text(labelLines, sumX + 7, rowY + 2.5);
+      
       st(C.darkGray); pdf.setFont('helvetica', 'bold');
       pdf.text(val, sumX + sumW - 7, rowY + 2.5, { align: 'right' });
-      rowY += 9;
+      const rowStep = Math.max(9, labelLines.length * 4);
+      rowY += rowStep;
     });
 
     const totY = y + 46;
@@ -817,7 +885,11 @@ const QuotationGenerator = () => {
       drawFooter(p, totalPages);
     }
 
-    pdf.save(`Quotation_${clientName || 'Client'}_${version}.pdf`);
+    if (mode === 'download') {
+      pdf.save(`Quotation_${clientName || 'Client'}_${version}.pdf`);
+    } else {
+      return pdf;
+    }
   };
 
 
@@ -878,6 +950,51 @@ const QuotationGenerator = () => {
           <div className="md:col-span-2 lg:col-span-4">
             <label className={labelCls}>Site Address</label>
             <textarea className={inputCls} rows={2} value={siteAddress} onChange={e => setSiteAddress(e.target.value)} placeholder="Enter complete site address" />
+          </div>
+        </div>
+      </Section>
+
+      {/* Material & Hardware Details */}
+      <Section
+        title="Material & Hardware Details"
+        subtitle="Specify the material, hardware brands, and lamination types for this quotation."
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div>
+            <label className={labelCls}>Type of Material</label>
+            <input 
+              className={inputCls} 
+              value={materialType} 
+              onChange={e => setMaterialType(e.target.value)} 
+              placeholder="e.g. MR Grade Plywood, BWP Plywood" 
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Hardware Company</label>
+            <input 
+              className={inputCls} 
+              value={hardwareCompany} 
+              onChange={e => setHardwareCompany(e.target.value)} 
+              placeholder="e.g. Hettich, Hafele, Blum" 
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Lamination Types</label>
+            <input 
+              className={inputCls} 
+              value={laminationType} 
+              onChange={e => setLaminationType(e.target.value)} 
+              placeholder="e.g. 1mm Glossy, Matte, Suede" 
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Custom Details / Notes</label>
+            <input 
+              className={inputCls} 
+              value={customMaterialDetails} 
+              onChange={e => setCustomMaterialDetails(e.target.value)} 
+              placeholder="Any other specifications..." 
+            />
           </div>
         </div>
       </Section>
@@ -1053,7 +1170,7 @@ const QuotationGenerator = () => {
                   {items.filter(i => i.room === room).map(item => {
                     const t = item.type === '__custom__' ? null : itemTypes.find(t => t.name === item.type);
                     const isLump = item.type === '__custom__' ? item.isLumpsum : t?.isLumpsum;
-                    const amt = isLump ? item.price : item.price * item.area;
+                    const amt = isLump ? Number(item.price) : Number(item.price) * item.area;
                     return (
                       <tr key={item.id}>
                         <td className="py-4 pr-4">
@@ -1063,14 +1180,13 @@ const QuotationGenerator = () => {
                             onChange={e => {
                               const val = e.target.value;
                               if (val === '__custom_item__') {
-                                updateItem(item.id, 'item', '__custom_item__');
-                                updateItem(item.id, 'customItemLabel' as any, '');
+                                updateItem(item.id, { item: '__custom_item__', customItemLabel: '' });
                               } else {
-                                updateItem(item.id, 'item', val);
                                 const found = itemTypes.find(t => t.name === val);
-                                if (found) {
-                                  updateItem(item.id, 'type', found.name);
-                                }
+                                updateItem(item.id, { 
+                                  item: val,
+                                  type: found ? found.name : item.type 
+                                });
                               }
                             }}
                           >
@@ -1088,7 +1204,7 @@ const QuotationGenerator = () => {
                                 className="w-full p-2 bg-amber-50 border border-amber-200 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-amber-200 text-sm"
                                 placeholder="Enter custom item name"
                                 value={item.customItemLabel ?? ''}
-                                onChange={e => updateItem(item.id, 'customItemLabel' as any, e.target.value)}
+                                onChange={e => updateItem(item.id, { customItemLabel: e.target.value })}
                               />
                             </div>
                           )}
@@ -1096,20 +1212,13 @@ const QuotationGenerator = () => {
                         <td className="py-4 pr-4">
                           <select
                             value={item.type}
-                            onChange={e => {
-                              const val = e.target.value;
-                              updateItem(item.id, 'type', val);
-                              if (val === '__custom__') {
-                                // Reset price for custom type entry
-                                updateItem(item.id, 'price', 0);
-                              }
-                            }}
+                            onChange={e => updateItem(item.id, { type: e.target.value })}
                             className="w-full p-3 bg-gray-50 border-none rounded-xl font-bold text-gray-700 shadow-inner outline-none focus:ring-2 focus:ring-indigo-100 text-sm appearance-none"
                           >
                             <option value="">Select Type</option>
                             {itemTypes.map(t => (
                               <option key={t.id} value={t.name}>
-                                {t.name} ({t.isLumpsum ? `₹${t.rate.toLocaleString('en-IN')} Lumpsum` : `₹${t.rate.toLocaleString('en-IN')}/sft`})
+                                {t.name} ({t.isLumpsum ? `₹${Number(t.rate).toLocaleString('en-IN')} Lumpsum` : `₹${Number(t.rate).toLocaleString('en-IN')}/sft`})
                               </option>
                             ))}
                             <option value="__custom__">— Custom (enter below) —</option>
@@ -1122,24 +1231,26 @@ const QuotationGenerator = () => {
                                 className="flex-1 p-2 bg-amber-50 border border-amber-200 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-amber-200 text-sm"
                                 placeholder="Custom type name"
                                 value={item.customTypeName ?? ''}
-                                onChange={e => updateItem(item.id, 'customTypeName' as any, e.target.value)}
+                                onChange={e => updateItem(item.id, { customTypeName: e.target.value })}
                               />
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
                                 className="w-24 p-2 bg-amber-50 border border-amber-200 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-amber-200 text-sm"
                                 placeholder="Rate"
-                                value={item.price || ''}
-                                onChange={e => updateItem(item.id, 'price', parseFloat(e.target.value) || 0)}
+                                value={item.price}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                    updateItem(item.id, { price: val });
+                                  }
+                                }}
                               />
                               <label className="flex items-center gap-1 text-xs text-gray-500 font-bold cursor-pointer">
                                 <input
                                   type="checkbox"
                                   checked={item.isLumpsum}
-                                  onChange={e => {
-                                    setItems(prev => prev.map(i =>
-                                      i.id === item.id ? { ...i, isLumpsum: e.target.checked } : i
-                                    ));
-                                  }}
+                                  onChange={e => updateItem(item.id, { isLumpsum: e.target.checked })}
                                   className="rounded"
                                 />
                                 Lump
@@ -1153,18 +1264,30 @@ const QuotationGenerator = () => {
                           ) : (
                             <div className="flex items-center gap-2">
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
                                 className="w-20 p-3 bg-gray-50 border-none rounded-xl font-bold text-gray-700 shadow-inner outline-none focus:ring-2 focus:ring-indigo-100 text-sm"
                                 value={item.d1 ?? 1}
-                                onChange={e => updateItem(item.id, 'd1', parseFloat(e.target.value) || 0)}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                    updateItem(item.id, { d1: val });
+                                  }
+                                }}
                                 placeholder="D1"
                               />
                               <span className="text-gray-400 font-black">×</span>
                               <input
-                                type="number"
+                                type="text"
+                                inputMode="decimal"
                                 className="w-20 p-3 bg-gray-50 border-none rounded-xl font-bold text-gray-700 shadow-inner outline-none focus:ring-2 focus:ring-indigo-100 text-sm"
                                 value={item.d2 ?? 1}
-                                onChange={e => updateItem(item.id, 'd2', parseFloat(e.target.value) || 0)}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                    updateItem(item.id, { d2: val });
+                                  }
+                                }}
                                 placeholder="D2"
                               />
                               <span className="text-xs text-gray-400 font-bold">= {item.area.toFixed(2)} sft</span>
@@ -1197,7 +1320,8 @@ const QuotationGenerator = () => {
                   <span className="text-xl font-black text-indigo-700">
                     {fmt(items.filter(i => i.room === room).reduce((s, i) => {
                       const t = itemTypes.find(t => t.name === i.type);
-                      return s + (t?.isLumpsum ? i.price : i.price * i.area);
+                      const isLump = t ? t.isLumpsum : i.isLumpsum;
+                      return s + (isLump ? Number(i.price) : Number(i.price) * i.area);
                     }, 0))}
                   </span>
                 </div>
@@ -1254,10 +1378,16 @@ const QuotationGenerator = () => {
               <div className="col-span-3 relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none">₹</span>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   className={`${inputCls} pl-8`}
                   value={service.price}
-                  onChange={e => handleServiceChange(idx, 'price', e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                      handleServiceChange(idx, 'price', val === '' ? 0 : parseFloat(val));
+                    }
+                  }}
                 />
               </div>
               <div className="col-span-5">
@@ -1291,12 +1421,16 @@ const QuotationGenerator = () => {
             <div key={label}>
               <label className={labelCls}>{label}</label>
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 className={inputCls}
                 value={val}
-                onChange={e => set(Number(e.target.value))}
-                min={0}
-                max={100}
+                onChange={e => {
+                  const v = e.target.value;
+                  if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                    set(v === '' ? 0 : Number(v));
+                  }
+                }}
               />
               <p className="mt-2 text-sm font-bold text-gray-400">Amount: {fmt(amt)}</p>
             </div>
@@ -1399,7 +1533,13 @@ const QuotationGenerator = () => {
 
         <div className="flex justify-end gap-4">
           <button
-            onClick={generatePDF}
+            onClick={handleOpenReview}
+            className="px-10 py-5 bg-white text-indigo-600 border-2 border-indigo-100 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-50 transition-all shadow-xl flex items-center gap-2"
+          >
+            <PencilSquareIcon className="w-5 h-5" /> Review & Bulk Edit
+          </button>
+          <button
+            onClick={() => generateQuotationPDF('download')}
             className="px-10 py-5 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 flex items-center gap-2"
           >
             <DocumentTextIcon className="w-5 h-5" /> Generate PDF
@@ -1430,6 +1570,211 @@ const QuotationGenerator = () => {
           </button>
         </div>
       </div>
+
+      {/* Review & Bulk Edit Modal */}
+      {isReviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-6xl h-[90vh] rounded-[2.5rem] overflow-hidden flex flex-col shadow-2xl">
+            <div className="p-8 border-b border-gray-100 flex items-center justify-between bg-white">
+              <div>
+                <h2 className="text-2xl font-black text-gray-900 tracking-tight">Final Review & Bulk Edit</h2>
+                <p className="text-sm font-medium text-gray-400 mt-1">Edit all items across all rooms in one place before generating the PDF</p>
+              </div>
+              <div className="flex gap-4">
+                <button
+                  onClick={() => {
+                    setIsGeneratingPDF(true);
+                    setTimeout(() => {
+                      generateQuotationPDF('download');
+                      setIsGeneratingPDF(false);
+                    }, 500);
+                  }}
+                  disabled={isGeneratingPDF}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-100"
+                >
+                  {isGeneratingPDF ? (
+                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Generating...</>
+                  ) : (
+                    <><DocumentTextIcon className="w-5 h-5" /> Download Final PDF</>
+                  )}
+                </button>
+                <button
+                  onClick={() => setIsReviewOpen(false)}
+                  className="px-6 py-3 bg-gray-100 text-gray-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-gray-200 transition-all"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-auto p-10 bg-gray-50/50">
+              <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-900 text-white font-black text-[10px] uppercase tracking-widest">
+                      <th className="py-5 px-6 text-left w-16">NO.</th>
+                      <th className="py-5 px-6 text-left">DESCRIPTION (EDITABLE)</th>
+                      <th className="py-5 px-6 text-center w-40">QTY / SFT</th>
+                      <th className="py-5 px-6 text-right w-40">RATE (₹)</th>
+                      <th className="py-5 px-6 text-right w-40">AMOUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {items.map((item, idx) => {
+                      const t = itemTypes.find(t => t.name === item.type);
+                      const isLump = item.isLumpsum || t?.isLumpsum;
+                      const itemAmt = isLump ? Number(item.price) : (Number(item.price) * item.area);
+                      const displayTitle = item.item === '__custom_item__' ? (item.customItemLabel || 'Custom Item') : item.item;
+                      const displayType = item.type === '__custom__' ? (item.customTypeName || 'Custom') : item.type;
+
+                      return (
+                        <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="py-4 px-6 font-black text-gray-400">{idx + 1}</td>
+                          <td className="py-4 px-6">
+                            <div className="space-y-1">
+                              <input 
+                                className="w-full bg-transparent border-b border-dashed border-gray-200 focus:border-indigo-500 focus:ring-0 font-bold text-gray-700 p-0"
+                                value={item.item === '__custom_item__' ? item.customItemLabel : item.item}
+                                onChange={(e) => {
+                                  if (item.item === '__custom_item__') {
+                                    updateItem(item.id, { customItemLabel: e.target.value });
+                                  } else {
+                                    updateItem(item.id, { item: e.target.value });
+                                  }
+                                }}
+                              />
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black text-gray-400 uppercase">Room:</span>
+                                <input 
+                                  className="bg-transparent border-b border-gray-100 focus:border-indigo-300 focus:ring-0 text-[10px] font-black text-gray-400 uppercase p-0 w-24"
+                                  value={item.room}
+                                  onChange={(e) => updateItem(item.id, { room: e.target.value })}
+                                />
+                                <span className="text-[10px] font-black text-gray-400 uppercase">| Type:</span>
+                                <input 
+                                  className="bg-transparent border-b border-gray-100 focus:border-indigo-300 focus:ring-0 text-[10px] font-black text-gray-400 uppercase p-0 w-32"
+                                  value={item.type === '__custom__' ? item.customTypeName : item.type}
+                                  onChange={(e) => {
+                                    if (item.type === '__custom__') {
+                                      updateItem(item.id, { customTypeName: e.target.value });
+                                    } else {
+                                      // If they edit a standard type name, we treat it as an override
+                                      updateItem(item.id, { type: '__custom__', customTypeName: e.target.value });
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            {isLump ? (
+                              <span className="flex justify-center text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-50 px-3 py-1 rounded-full w-fit mx-auto">Lumpsum</span>
+                            ) : (
+                              <div className="flex items-center justify-center gap-2">
+                                <input 
+                                  className="w-12 text-center bg-gray-50 border-none rounded-lg font-bold text-gray-700 p-1 focus:ring-2 focus:ring-indigo-100"
+                                  value={item.d1}
+                                  onChange={(e) => updateItem(item.id, { d1: e.target.value })}
+                                />
+                                <span className="text-gray-300">×</span>
+                                <input 
+                                  className="w-12 text-center bg-gray-50 border-none rounded-lg font-bold text-gray-700 p-1 focus:ring-2 focus:ring-indigo-100"
+                                  value={item.d2}
+                                  onChange={(e) => updateItem(item.id, { d2: e.target.value })}
+                                />
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-gray-400 font-bold">₹</span>
+                              <input 
+                                className="w-24 text-right bg-gray-50 border-none rounded-lg font-bold text-gray-700 p-1 focus:ring-2 focus:ring-indigo-100"
+                                value={item.price}
+                                onChange={(e) => updateItem(item.id, { price: e.target.value })}
+                              />
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 text-right font-black text-indigo-600">
+                            ₹{Math.round(itemAmt).toLocaleString('en-IN')}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Services Section in Review */}
+              {services.filter(s => s.price > 0).length > 0 && (
+                <div className="mt-10 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="bg-amber-50 px-6 py-4 border-b border-amber-100 italic text-[10px] font-black text-amber-700 uppercase tracking-widest">
+                    Additional Services
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-800 text-white font-black text-[10px] uppercase tracking-widest">
+                        <th className="py-4 px-6 text-left w-16">NO.</th>
+                        <th className="py-4 px-6 text-left">SERVICE / DESCRIPTION (EDITABLE)</th>
+                        <th className="py-4 px-6 text-right w-40">AMOUNT (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {services.filter(s => s.price > 0).map((svc, sidx) => (
+                        <tr key={sidx} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="py-4 px-6 font-black text-gray-400">{items.length + sidx + 1}</td>
+                          <td className="py-4 px-6">
+                            <div className="space-y-1">
+                              <input 
+                                className="w-full bg-transparent border-b border-dashed border-gray-200 focus:border-indigo-500 focus:ring-0 font-bold text-gray-700 p-0"
+                                value={svc.type}
+                                readOnly={sidx < 3} // Keep default types read-only to map to original state
+                              />
+                              <input 
+                                className="w-full bg-transparent border-none focus:ring-0 text-xs text-gray-500 p-0"
+                                value={svc.details}
+                                placeholder="Service particulars..."
+                                onChange={(e) => handleServiceChange(services.indexOf(svc), 'details', e.target.value)}
+                              />
+                            </div>
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-gray-400 font-bold">₹</span>
+                              <input 
+                                className="w-24 text-right bg-gray-50 border-none rounded-lg font-bold text-gray-700 p-1 focus:ring-2 focus:ring-indigo-100"
+                                value={svc.price}
+                                onChange={(e) => handleServiceChange(services.indexOf(svc), 'price', e.target.value)}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-8 border-t border-gray-100 bg-white flex items-center justify-between">
+               <div className="flex gap-10">
+                 <div>
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sub Total</p>
+                   <p className="text-lg font-black text-gray-800">₹{Math.round(calcItemsSubtotal()).toLocaleString('en-IN')}</p>
+                 </div>
+                 <div>
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Taxes & Disc.</p>
+                   <p className="text-lg font-black text-gray-800">₹{Math.round(calcCgstAmt() + calcSgstAmt() - calcDiscountAmt()).toLocaleString('en-IN')}</p>
+                 </div>
+               </div>
+               <div className="text-right">
+                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Final Amount</p>
+                 <p className="text-3xl font-black text-indigo-600">₹{Math.round(calcTotal()).toLocaleString('en-IN')}</p>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Customer Popup */}
       <CustomerSearchPopup

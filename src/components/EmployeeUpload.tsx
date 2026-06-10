@@ -71,7 +71,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               />
             </div>
 
@@ -83,7 +83,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 required
                 value={formData.email}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               />
             </div>
 
@@ -95,7 +95,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 required
                 value={formData.phone}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               />
             </div>
 
@@ -108,7 +108,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 required
                 value={formData.position}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               />
             </div>
 
@@ -119,7 +119,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 name="department"
                 value={formData.department}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               />
             </div>
 
@@ -131,15 +131,15 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 required
                 value={formData.joiningDate}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">Salary *</label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500 sm:text-sm">₹</span>
+              <div className="mt-1 relative rounded-lg shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <span className="text-gray-500 sm:text-base">₹</span>
                 </div>
                 <input
                   type="number"
@@ -147,7 +147,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                   required
                   value={formData.salary}
                   onChange={handleChange}
-                  className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                  className="pl-9 block w-full rounded-lg border-gray-300 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
                 />
               </div>
             </div>
@@ -160,7 +160,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 name="address"
                 value={formData.address}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               />
             </div>
 
@@ -171,7 +171,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 name="city"
                 value={formData.city}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               />
             </div>
 
@@ -182,7 +182,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 name="state"
                 value={formData.state}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               />
             </div>
 
@@ -193,7 +193,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 name="pincode"
                 value={formData.pincode}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               />
             </div>
 
@@ -203,7 +203,7 @@ const EmployeeUpload: React.FC<EmployeeUploadProps> = ({ onClose, onUploadSucces
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="mt-1 block w-full rounded-lg border-gray-300 px-4 py-3 text-base shadow-sm focus:border-blue-500 focus:ring-blue-500 transition-all"
               >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>

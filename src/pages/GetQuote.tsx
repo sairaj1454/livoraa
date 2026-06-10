@@ -23,10 +23,13 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { useEmailNotification } from '../hooks/useEmailNotification';
 
 const GetQuote = () => {
     const [step, setStep] = useState(1);
     const navigate = useNavigate();
+    const { sendEmail } = useEmailNotification();
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [formData, setFormData] = useState({
         floorPlan: '',
@@ -83,6 +86,13 @@ const GetQuote = () => {
             return;
         }
 
+        const phoneRegex = /^[6-9]\d{9}$/;
+        if (!phoneRegex.test(formData.phone.replace(/\s/g, ''))) {
+            toast.error('Enter a valid 10-digit Indian mobile number');
+            return;
+        }
+
+        setIsSubmitting(true);
         try {
             const requestsRef = collection(db, 'personalized_enquiries');
             await addDoc(requestsRef, {
@@ -91,11 +101,25 @@ const GetQuote = () => {
                 status: 'pending'
             });
 
+            // Send email notification to admin
+            await sendEmail({
+                name: formData.name,
+                phone: formData.phone,
+                formType: 'get-quote',
+                message: `Floor Plan: ${formData.floorPlan}
+Purpose: ${formData.purpose}
+Requirements: ${formData.requirements.join(', ')}
+Property Location: ${formData.location}
+Budget: ${formData.budget}`,
+            });
+
             setStep(4); // Success step
             toast.success('Quote request submitted successfully!');
         } catch (error) {
             console.error('Error submitting quote request:', error);
             toast.error('Failed to submit request. Please try again.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -283,14 +307,17 @@ const GetQuote = () => {
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-xs md:text-sm font-bold text-[#4A2D1D] uppercase tracking-wider">Phone Number</label>
-                                        <div className="relative">
-                                            <HiPhone className="absolute left-4 top-1/2 -translate-y-1/2 text-[#BC9B7A] text-xl" />
+                                        <div className="flex rounded-xl border border-gray-100 bg-[#FBFBFB] overflow-hidden focus-within:ring-2 focus-within:ring-[#BC9B7A]/20 focus-within:border-[#BC9B7A] transition-all">
+                                            <span className="flex items-center px-3 bg-gray-100 text-gray-600 font-semibold text-sm border-r border-gray-200 select-none whitespace-nowrap">
+                                                +91
+                                            </span>
                                             <input
                                                 type="tel"
                                                 placeholder="Your Phone Number"
                                                 value={formData.phone}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                                                className="w-full pl-12 pr-4 py-4 rounded-xl border border-gray-100 bg-[#FBFBFB] focus:ring-2 focus:ring-[#BC9B7A]/20 focus:border-[#BC9B7A] transition-all outline-none"
+                                                maxLength={10}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value.replace(/\D/g, '') }))}
+                                                className="flex-1 px-3 py-4 bg-transparent focus:outline-none"
                                             />
                                         </div>
                                     </div>
@@ -336,9 +363,18 @@ const GetQuote = () => {
                                     </button>
                                     <button
                                         onClick={handleSubmit}
-                                        className="flex-[2] sm:flex-none flex items-center justify-center gap-2 px-6 md:px-12 py-3.5 md:py-4 bg-[#4a2e1f] text-white rounded-xl font-bold hover:bg-[#3d261a] transition-colors shadow-lg shadow-black/10 text-sm md:text-base"
+                                        disabled={isSubmitting}
+                                        className="flex-[2] sm:flex-none flex items-center justify-center gap-2 px-6 md:px-12 py-3.5 md:py-4 bg-[#4a2e1f] text-white rounded-xl font-bold hover:bg-[#3d261a] transition-colors shadow-lg shadow-black/10 text-sm md:text-base disabled:opacity-70 disabled:cursor-not-allowed"
                                     >
-                                        Submit Request
+                                        {isSubmitting ? (
+                                            <>
+                                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                                </svg>
+                                                Submitting...
+                                            </>
+                                        ) : 'Submit Request'}
                                     </button>
                                 </div>
                             </div>

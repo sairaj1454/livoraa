@@ -1,9 +1,9 @@
 import emailjs from '@emailjs/browser';
 
 // EmailJS credentials
-const SERVICE_ID = 'service_z7kagc4';
-const TEMPLATE_ID = 'template_xvd585o';
-const PUBLIC_KEY = 'wGzsvi5X7v8prOba-';
+const SERVICE_ID = 'service_gb9ynff';
+const TEMPLATE_ID = 'template_9zt9yfm';
+const PUBLIC_KEY = 'oOOOitjU95GaDU0hL';
 
 interface EmailData {
   to?: string;
@@ -41,10 +41,10 @@ Submission Time: ${new Date().toLocaleString()}
         : data.message;
 
       const templateParams = {
-        to_email: data.to || 'ecnodev@gmail.com',
+        to_email: data.to || 'livoraaatelier@gmail.com',
         subject: data.subject || `New ${data.formType} Enquiry`,
         from_name: data.name || 'LIVORAA ATELIER',
-        from_email: data.email || 'noreply@LIVORAA ATELIER.com',
+        from_email: data.email || 'livoraaatelier@gmail.com',
         phone: data.phone || '',
         message: formattedMessage,
         form_type: data.formType || 'campaign',

@@ -45,17 +45,17 @@ export interface Customer {
 export interface QuotationItem {
   id: string;
   name: string;
-  quantity: number;
-  rate: number;
-  amount: number;
+  quantity: number | string;
+  rate: number | string;
+  amount: number | string;
   isLumpsum: boolean;
-  price: number;
-  area: number;
+  price: number | string;
+  area: number; // Keep area as number for calculation if possible, or string if needed
   type: string;
   item: string;
   room: string;
-  d1?: number;
-  d2?: number;
+  d1?: number | string;
+  d2?: number | string;
   customTypeName?: string;  // used when type === '__custom__'
   isCustomItem?: boolean;    // used when item name is custom
   customItemLabel?: string;  // used when item name is custom
@@ -79,6 +79,10 @@ export interface Quotation {
   paintingDesc: string;
   terms: string[];
   total: number;
+  materialType: string;
+  hardwareCompany: string;
+  laminationType: string;
+  customMaterialDetails?: string; 
   timestamp: Date;
 }
 

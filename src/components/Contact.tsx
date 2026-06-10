@@ -4,6 +4,13 @@ import { FaUser, FaEnvelope, FaPhone, FaPencilAlt } from 'react-icons/fa';
 import { useFormSubmission } from '../hooks/useFormSubmission';
 import { toast } from 'react-toastify';
 
+interface FormErrors {
+  name: string;
+  email: string;
+  phone: string;
+  message: string;
+}
+
 const Contact: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
@@ -11,10 +18,56 @@ const Contact: React.FC = () => {
     phone: '',
     message: '',
   });
+  const [errors, setErrors] = useState<FormErrors>({ name: '', email: '', phone: '', message: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { submitForm } = useFormSubmission();
+
+  const validate = (): boolean => {
+    const newErrors: FormErrors = { name: '', email: '', phone: '', message: '' };
+    let valid = true;
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Full name is required';
+      valid = false;
+    } else if (formData.name.trim().length < 2) {
+      newErrors.name = 'Name must be at least 2 characters';
+      valid = false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email address is required';
+      valid = false;
+    } else if (!emailRegex.test(formData.email)) {
+      newErrors.email = 'Enter a valid email address';
+      valid = false;
+    }
+
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Phone number is required';
+      valid = false;
+    } else if (!phoneRegex.test(formData.phone.replace(/\s/g, ''))) {
+      newErrors.phone = 'Enter a valid 10-digit Indian mobile number';
+      valid = false;
+    }
+
+    if (!formData.message.trim()) {
+      newErrors.message = 'Message is required';
+      valid = false;
+    } else if (formData.message.trim().length < 10) {
+      newErrors.message = 'Message must be at least 10 characters';
+      valid = false;
+    }
+
+    setErrors(newErrors);
+    return valid;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validate()) return;
+    setIsSubmitting(true);
     try {
       const result = await submitForm({
         ...formData,
@@ -23,11 +76,14 @@ const Contact: React.FC = () => {
       if (result.success) {
         toast.success('Thank you for your message! We will contact you soon.');
         setFormData({ name: '', email: '', phone: '', message: '' });
+        setErrors({ name: '', email: '', phone: '', message: '' });
       } else {
         toast.error('Failed to submit form. Please try again.');
       }
     } catch (error) {
       toast.error('An error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -97,12 +153,15 @@ const Contact: React.FC = () => {
                       id="name"
                       name="name"
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-[#F8F3EE] focus:ring-2 focus:ring-[#C4A484] focus:border-transparent transition duration-200 bg-white text-[#4A2D1D]"
+                      onChange={(e) => {
+                        setFormData({ ...formData, name: e.target.value });
+                        if (errors.name) setErrors({ ...errors, name: '' });
+                      }}
+                      className={`w-full pl-12 pr-4 py-3 rounded-xl border-2 ${errors.name ? 'border-red-400 focus:ring-red-300' : 'border-[#F8F3EE] focus:ring-[#C4A484]'} focus:ring-2 focus:border-transparent transition duration-200 bg-white text-[#4A2D1D]`}
                       placeholder="Enter your full name"
-                      required
                     />
                   </div>
+                  {errors.name && <p className="text-red-500 text-xs mt-1 ml-1">{errors.name}</p>}
                 </div>
 
                 <div>
@@ -116,31 +175,39 @@ const Contact: React.FC = () => {
                       id="email"
                       name="email"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-[#F8F3EE] focus:ring-2 focus:ring-[#C4A484] focus:border-transparent transition duration-200 bg-white text-[#4A2D1D]"
+                      onChange={(e) => {
+                        setFormData({ ...formData, email: e.target.value });
+                        if (errors.email) setErrors({ ...errors, email: '' });
+                      }}
+                      className={`w-full pl-12 pr-4 py-3 rounded-xl border-2 ${errors.email ? 'border-red-400 focus:ring-red-300' : 'border-[#F8F3EE] focus:ring-[#C4A484]'} focus:ring-2 focus:border-transparent transition duration-200 bg-white text-[#4A2D1D]`}
                       placeholder="Enter your email address"
-                      required
                     />
                   </div>
+                  {errors.email && <p className="text-red-500 text-xs mt-1 ml-1">{errors.email}</p>}
                 </div>
 
                 <div>
                   <label htmlFor="phone" className="block text-sm font-semibold text-[#4A2D1D] mb-2">Phone Number</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <FaPhone className="h-5 w-5 text-[#C4A484]" />
-                    </div>
+                  <div className={`flex rounded-xl border-2 ${errors.phone ? 'border-red-400' : 'border-[#F8F3EE]'} overflow-hidden focus-within:ring-2 ${errors.phone ? 'focus-within:ring-red-300' : 'focus-within:ring-[#C4A484]'} focus-within:border-transparent transition duration-200 bg-white`}>
+                    <span className="flex items-center px-3 bg-[#F8F3EE] text-[#4A2D1D] font-semibold text-sm border-r border-[#e8e0d8] select-none whitespace-nowrap">
+                      +91
+                    </span>
                     <input
                       type="tel"
                       id="phone"
                       name="phone"
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-[#F8F3EE] focus:ring-2 focus:ring-[#C4A484] focus:border-transparent transition duration-200 bg-white text-[#4A2D1D]"
+                      maxLength={10}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        setFormData({ ...formData, phone: val });
+                        if (errors.phone) setErrors({ ...errors, phone: '' });
+                      }}
+                      className="flex-1 px-3 py-3 focus:outline-none bg-white text-[#4A2D1D]"
                       placeholder="Enter your phone number"
-                      required
                     />
                   </div>
+                  {errors.phone && <p className="text-red-500 text-xs mt-1 ml-1">{errors.phone}</p>}
                 </div>
 
                 <div>
@@ -153,22 +220,34 @@ const Contact: React.FC = () => {
                       id="message"
                       name="message"
                       value={formData.message}
-                      onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, message: e.target.value });
+                        if (errors.message) setErrors({ ...errors, message: '' });
+                      }}
                       rows={4}
-                      className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-[#F8F3EE] focus:ring-2 focus:ring-[#C4A484] focus:border-transparent transition duration-200 bg-white text-[#4A2D1D]"
+                      className={`w-full pl-12 pr-4 py-3 rounded-xl border-2 ${errors.message ? 'border-red-400 focus:ring-red-300' : 'border-[#F8F3EE] focus:ring-[#C4A484]'} focus:ring-2 focus:border-transparent transition duration-200 bg-white text-[#4A2D1D]`}
                       placeholder="Tell us about your project"
-                      required
                     ></textarea>
                   </div>
+                  {errors.message && <p className="text-red-500 text-xs mt-1 ml-1">{errors.message}</p>}
                 </div>
 
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   type="submit"
-                  className="w-full bg-[#4A2D1D] text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:bg-[#3A1D0D] transition-all duration-300"
+                  disabled={isSubmitting}
+                  className="w-full bg-[#4A2D1D] text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:bg-[#3A1D0D] transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Send Message
+                  {isSubmitting ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Sending...
+                    </>
+                  ) : 'Send Message'}
                 </motion.button>
               </div>
             </form>
